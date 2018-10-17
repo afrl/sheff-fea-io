@@ -1,0 +1,9 @@
+*.iobj
+*.ipdb
+*.pdb
+*.vs
+*.tlog
+*.obj
+*.idb
+*.exe
+*..lastbuildstate
