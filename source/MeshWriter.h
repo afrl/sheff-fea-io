@@ -122,6 +122,9 @@ namespace fea_io
 		// Perhaps add EulerAngleXXX for the different options
 	};
 
+	/// Given a type of local coordinate system parameterization this
+	/// function will return the number of paramerters needed to
+	/// describe a coordinate system.
 	static int get_num_parameters(const LCSParameterization& lcs_p)
 	{
 		if (lcs_p == LCSParameterization::Quaternion ||
@@ -132,6 +135,20 @@ namespace fea_io
 			throw 0; // TODO throw a real error
 	};
 
+	/// This struct describes all of the informaiton needed to known
+	/// the size of a particular component on the disk.
+	/// The component data within the binary mesh file is expected to take the form:
+	/// - Component index (LocalIndex)
+	/// - # nodes in component (LocalIndex)
+	/// - List of node indices that appears in any element in the
+	///   component (LocalIndex * # nodes in the component)
+	/// - # nodes in elements (LocalIndex)
+	/// - List of element indices in the component
+	///   (LocalIndex * # nodes in the component)
+	/// - Level at which local coordinate systems are assigned (enum : char)
+	/// - Parameterization type of local coordinate systems (enum : char)
+	/// - List of local coordinate system parmaeters (size varies depending
+	///   on the level of assignment and type of parameterization)
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	struct ComponentInfo
 	{
@@ -166,6 +183,27 @@ namespace fea_io
 				+ size_for_lcs_data;
 		};
 	};
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	void to_json(json& j, const ComponentInfo<GlobalIndex, LocalIndex, CoordType>& ci)
+	{
+		j = json{ {"component_index", ci.component_index},
+			{"num_nodes_in_component", ci.num_nodes_in_component},
+			{"num_elements_in_component", ci.num_elements_in_component},
+			{"lcs_assignment", ci.lcs_assignment},
+			{"lcs_parameterization", ci.lcs_parameterization}
+		};
+	}
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	void from_json(const json& j, ComponentInfo<GlobalIndex, LocalIndex, CoordType>& ci)
+	{
+		j.at("component_index").get_to(ci.component_index);
+		j.at("num_nodes_in_component").get_to(ci.num_nodes_in_component);
+		j.at("num_elements_in_component").get_to(ci.num_elements_in_component);
+		j.at("lcs_assignment").get_to(ci.lcs_assignment);
+		j.at("lcs_parameterization").get_to(ci.lcs_parameterization);
+	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	struct SubdomainInfo
@@ -204,8 +242,7 @@ namespace fea_io
 			{"num_elements", ss.num_elements},
 			{"extent", ss.extent},
 			{"num_components", ss.num_components},
-			{"num_nodes_in_components", ss.num_nodes_in_components},
-			{"num_elements_in_components", ss.num_elements_in_components}
+			{"components", ss.components}
 		};
 	}
 
@@ -217,8 +254,7 @@ namespace fea_io
 		j.at("num_elements").get_to(ss.num_elements);
 		j.at("extent").get_to(ss.extent);
 		j.at("num_components").get_to(ss.num_components);
-		j.at("num_nodes_in_components").get_to(ss.num_nodes_in_components);
-		j.at("num_elements_in_components").get_to(ss.num_elements_in_components);
+		j.at("components").get_to(ss.components);
 	}
 
 	/// The workflow should be:
@@ -297,10 +333,52 @@ namespace fea_io
 		json j = subdomain_info_;
 		// Serialize the JSON data using CBOR (concise bindary object
 		// representation), which will be communicated over MPI
-		std::vector<std::uint8_t> v_cbor = json::to_cbor(j);
+		std::vector<std::uint8_t> serialized_subdomain_info = json::to_cbor(j);
+
+		// Get information about the MPI communicator
+		int comm_size;
+		MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+		int comm_rank;
+		MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
 
 		// Communicate the size of the data on each rank that will be communciated
+		// Assume no two processors have duplicates of the subdomains
+		int num_bytes_for_this_proc = serialized_subdomain_info.size();
+		std::vector<int> num_bytes_for_each_proc(comm_size + 1);
+		MPI_Allgather(&num_bytes_for_this_proc, 1, MPI_INT,
+			&num_bytes_for_each_proc[0], 1, MPI_INT, MPI_COMM_WORLD);
 
+		// TODO
+		int num_total_bytes_needed = 0;
+		for (auto num_bytes : num_bytes_for_each_proc)
+			num_total_bytes_needed += num_bytes;
+
+		// TODO
+		std::vector<char> recv_buffer(num_total_bytes_needed);
+		std::vector<int> recv_counts(comm_size);
+		std::vector<int> recv_offsets(comm_size + 1);
+		int offset = 0;
+		for (auto i = 0; i < comm_size; i++) {
+			recv_counts[i] = num_bytes_for_each_proc[i];
+			recv_offsets[i] = offset;
+			offset += recv_counts[i];
+		}
+		recv_offsets.back() = offset;
+
+		// Set the 
+		MPI_Allgatherv(&serialized_subdomain_info[0],
+			static_cast<int>(serialized_subdomain_info.size()), MPI_CHAR,
+			&recv_buffer[0], &recv_counts[0], &recv_offsets[0], MPI_CHAR,
+			MPI_COMM_WORLD);
+
+		// Communciate the number of subdomain_info objects
+		// Communicate the size of each subdomain_info object
+
+		// On rank 0, deserialize the subdomain info from each process
+		if (comm_rank == 0) {
+			subdomain_info_.clear();
+			// TODO serialize
+		}
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
