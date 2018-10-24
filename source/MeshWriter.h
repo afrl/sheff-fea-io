@@ -366,7 +366,7 @@ namespace fea_io
 		recv_offsets.back() = offset;
 
 		// Set the 
-		MPI_Allgatherv(&serialized_subdomain_info[0],
+		MPI_Gatherv(&serialized_subdomain_info[0],
 			static_cast<int>(serialized_subdomain_info.size()), MPI_CHAR,
 			&recv_buffer[0], &recv_counts[0], &recv_offsets[0], MPI_CHAR,
 			MPI_COMM_WORLD);
