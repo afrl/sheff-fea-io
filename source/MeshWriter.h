@@ -3,11 +3,12 @@
 #include <array>
 #include <stdint.h>
 #include <vector>
+#include <fstream>
 
 #include <nlohmann/json.hpp>
 
 #ifdef HAVE_MPI
-#include <mpi.h>
+#include "MPIUtils.h"
 #endif
 
 namespace fea_io
@@ -269,6 +270,7 @@ namespace fea_io
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	class MeshWriter
 	{
+	public:
 		enum class WriteMode : char {
 			Serial,
 			Parallel
@@ -280,14 +282,23 @@ namespace fea_io
 		};
 
 		// Only constructor to use.
-		MeshWriter(const MeshHeader<GlobalIndex, LocalIndex, CoordType>& header, const WriteMode& write_mode);
+		MeshWriter(const MeshHeader<GlobalIndex, LocalIndex, CoordType>& header,
+			const WriteMode& write_mode,
+			const std::string file_path);
 
 		// if in parallel mode, then this needs to be called for each subdomain
 		// before writing begins.  An error will be thrown otherwise.
 		void queue_subdomain_for_write(const SubdomainInfo<GlobalIndex, LocalIndex, CoordType>& subdomain_info);
+
+		// TODO document
+		void start_parallel_write_phase();
+
 		// Write one subdomain
 		void write_subdomain(/**/);
 
+		// Close the binary file, writes the JSON file, and resets the MeshWriter object. 
+		// Note: this gets call with the destructor, so you don't have to call it unless
+		// you want to force it to release memory early and finish up the files.
 		void finalize();
 
 	private:
@@ -296,6 +307,7 @@ namespace fea_io
 		MeshHeader<GlobalIndex, LocalIndex, CoordType> header_;
 		WriteMode write_mode_;
 		WriteState write_state_;
+		std::string file_path_;
 
 		// Variables needed to track changes. Save positions as write_subdomain
 		// is called, and use these positions to update the lookup tables at
@@ -304,21 +316,18 @@ namespace fea_io
 		std::vector<std::streamoff> updated_subdomain_offsets_;
 		std::vector<SubdomainInfo<GlobalIndex, LocalIndex, CoordType>> subdomain_info_;
 		
-		// If MPI is available, then this will sync all the subdomain across
-		// the MPI ranks.  Works by converting the struct to json, serializing
-		// the data, and communicating the bytes over MPI.
-		void sync_subdomain_info();
-		// Given the current state of subdomain_info_, this method will calculate
-		// the offsets that each subdomain will have.  header_ will be updated
-		// accordingly.
-		void calculate_offsets();
+		/// Given the current state of subdomain_info_, this method will calculate the
+		/// offsets that each subdomain will have.  header_ will be updated accordingly.
+		/// Returns the total number of bytes needed for the mesh file.
+		std::streamoff calculate_offsets();
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline MeshWriter<GlobalIndex, LocalIndex, CoordType>::MeshWriter(const MeshHeader<GlobalIndex, LocalIndex, CoordType>& header, const WriteMode & write_mode)
+	inline MeshWriter<GlobalIndex, LocalIndex, CoordType>::MeshWriter(const MeshHeader<GlobalIndex, LocalIndex, CoordType>& header, const WriteMode & write_mode, const std::string file_path)
 	{
 		header_ = header;
 		write_mode_ = write_mode;
+		file_path_ = file_path;
 
 		if (write_mode == WriteMode::Serial)
 			write_state_ = WriteState::WritePhase;
@@ -327,63 +336,62 @@ namespace fea_io
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::sync_subdomain_info()
+	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::queue_subdomain_for_write(const SubdomainInfo<GlobalIndex, LocalIndex, CoordType>& subdomain_info)
 	{
-		// Create a JSON array from the subdomain info objects
-		json j = subdomain_info_;
-		// Serialize the JSON data using CBOR (concise bindary object
-		// representation), which will be communicated over MPI
-		std::vector<std::uint8_t> serialized_subdomain_info = json::to_cbor(j);
+		// TODO check if queue phase, otherwise throw
 
-		// Get information about the MPI communicator
-		int comm_size;
-		MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-		int comm_rank;
-		MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
-
-		// Communicate the size of the data on each rank that will be communciated
-		// Assume no two processors have duplicates of the subdomains
-		int num_bytes_for_this_proc = serialized_subdomain_info.size();
-		std::vector<int> num_bytes_for_each_proc(comm_size + 1);
-		MPI_Allgather(&num_bytes_for_this_proc, 1, MPI_INT,
-			&num_bytes_for_each_proc[0], 1, MPI_INT, MPI_COMM_WORLD);
-
-		// TODO
-		int num_total_bytes_needed = 0;
-		for (auto num_bytes : num_bytes_for_each_proc)
-			num_total_bytes_needed += num_bytes;
-
-		// TODO
-		std::vector<char> recv_buffer(num_total_bytes_needed);
-		std::vector<int> recv_counts(comm_size);
-		std::vector<int> recv_offsets(comm_size + 1);
-		int offset = 0;
-		for (auto i = 0; i < comm_size; i++) {
-			recv_counts[i] = num_bytes_for_each_proc[i];
-			recv_offsets[i] = offset;
-			offset += recv_counts[i];
-		}
-		recv_offsets.back() = offset;
-
-		// Set the 
-		MPI_Gatherv(&serialized_subdomain_info[0],
-			static_cast<int>(serialized_subdomain_info.size()), MPI_CHAR,
-			&recv_buffer[0], &recv_counts[0], &recv_offsets[0], MPI_CHAR,
-			MPI_COMM_WORLD);
-
-		// Communciate the number of subdomain_info objects
-		// Communicate the size of each subdomain_info object
-
-		// On rank 0, deserialize the subdomain info from each process
-		if (comm_rank == 0) {
-			subdomain_info_.clear();
-			// TODO serialize
-		}
+		subdomain_info_.push_back(subdomain_info);
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::calculate_offsets()
+	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::start_parallel_write_phase()
 	{
+		// TODO check if queue phase, otherwise throw
+
+		// First calculate the offsets and get the size of the file needed
+		std::streamoff size_needed = calculate_offsets();
+
+		if (MPIUtils::get_local_rank() == 0) {
+			// For now, zeroes will be written to a file to preallocate it.
+			// the OS should have a way to preallocate a non-fragmented file
+			// without writing the data, but it is not clear how to do it in a
+			// portable way.  So for now...the dumb method will suffice.
+			std::ofstream out_stream(file_path_, std::ios::binary);
+			const int buffer_size = 1024* 1024; // 1 MB buffer
+			std::vector<char> zero_buffer(buffer_size, 0);
+			std::streamoff num_bytes_left = size_needed;
+			while (num_bytes_left != 0) {
+				if (num_bytes_left < buffer_size) {
+					out_stream.write(&zero_buffer[0], num_bytes_left);
+					num_bytes_left = 0;
+				}
+				else {
+					out_stream.write(&zero_buffer[0], buffer_size);
+					num_bytes_left -= buffer_size;
+				}
+			}
+			out_stream.close();
+		}
+
+		// Broadcast the header to all rank so they know the offsets
+		// TODO
+
+		write_state_ = WriteState::WritePhase;
+	}
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	inline std::streamoff MeshWriter<GlobalIndex, LocalIndex, CoordType>::calculate_offsets()
+	{
+
+#ifdef HAVE_MPI
+		// The root rank will get the entire list of subdomain info, which will allow it
+		// to calculate the appropriate offsets.
+		auto all_subdomain_info = MPIUtils::gather_vectors(subdomain_info_);
+#else
+		// If this was not compiled using MPI, the the process must have all of the data already
+		auto all_subdomain_info = subdomain_info_;
+#endif
+
 		// Compute the size needed for each domain, and save the size required
 		// for each subdomain within an ordered vector (this means that the
 		// subdomains will ordered by index within the binary file)
@@ -393,11 +401,13 @@ namespace fea_io
 
 		// Compute the offsets of each subdomain (starting at 0)
 		header_.subdomain_offsets.resize(subdomain_byte_sizes.size());
-		auto prev_size = 0;
+		std::streamoff prev_size = 0;
 		for (auto i = 0; i < subdomain_byte_sizes.size(); i++) {
-			header_.subdomain_offsets[i] = prev_size + subdomain_byte_sizes[i];
-			prev_size = header_.subdomain_offsets[i];
+			header_.subdomain_offsets[i] = prev_size;
+			prev_size += subdomain_byte_sizes[i];
 		}
+
+		return prev_size;
 	}
 
 }
