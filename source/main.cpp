@@ -70,31 +70,31 @@ void get_test_subdomain_info(fea_io::MeshHeader<int16_t, int16_t, double>& heade
 		2,
 		{0, 0, 0, 1, 1, 0},
 		2,
-		4,
-		{0, 0, 1, 1},
+		{0, 1},
+		{"Constituent0", "Constituent1"},
 		2,
 		{}
 	};
 
 	fea_io::DataTypeSizes<int16_t, int16_t, double> data_types;
 
-	fea_io::ComponentInfo<int16_t, int16_t, double> component0 = {
+	fea_io::SubconstituentInfo<int16_t, int16_t, double> sc0 = {
 		0,
 		4,
 		1,
-		fea_io::LCSAssignment::Component,
+		fea_io::LCSAssignment::Constituent,
 		fea_io::LCSParameterization::Quaternion
 	};
 
-	fea_io::ComponentInfo<int16_t, int16_t, double> component1 = {
+	fea_io::SubconstituentInfo<int16_t, int16_t, double> sc1 = {
 		1,
 		4,
 		4,
-		fea_io::LCSAssignment::Component,
+		fea_io::LCSAssignment::Constituent,
 		fea_io::LCSParameterization::Quaternion
 	};
 
-	fea_io::ComponentInfo<int16_t, int16_t, double> component2 = {
+	fea_io::SubconstituentInfo<int16_t, int16_t, double> sc2 = {
 		2,
 		4,
 		1,
@@ -102,7 +102,7 @@ void get_test_subdomain_info(fea_io::MeshHeader<int16_t, int16_t, double>& heade
 		fea_io::LCSParameterization::Quaternion
 	};
 
-	fea_io::ComponentInfo<int16_t, int16_t, double> component3 = {
+	fea_io::SubconstituentInfo<int16_t, int16_t, double> sc3 = {
 		3,
 		4,
 		4,
@@ -116,7 +116,7 @@ void get_test_subdomain_info(fea_io::MeshHeader<int16_t, int16_t, double>& heade
 		2,
 		{0, 0, 0, 0.5, 0.5, 0},
 		2,
-		{ component0, component2 }
+		{ sc0, sc2 }
 	};
 
 	fea_io::SubdomainInfo<int16_t, int16_t, double> subdomain1 = {
@@ -125,10 +125,25 @@ void get_test_subdomain_info(fea_io::MeshHeader<int16_t, int16_t, double>& heade
 		2,
 		{0.5, 0.5, 0, 1, 1, 0},
 		2,
-		{ component1, component3 }
+		{ sc1, sc3 }
 	};
 
 	subdomains = { subdomain0, subdomain1 };
+}
+
+void write_subdomain0(fea_io::MeshWriter<int16_t, int16_t, double>& writer)
+{
+	writer.write_subdomain(0,
+		{ 0, 1, 3, 4, 6, 7 },
+		{ 0, 0, 0, 0, 0, 0 },
+		{ 0, 1, 0.5, 1, 0, 0.5, 0.5, 0.5, 0, 0, 0.5, 0 },
+		{ 0, 2 },
+		{ 0, 0 },
+		{ fea_io::ElementType::Q2D4N, fea_io::ElementType::Q2D4N },
+		{ {0, 2, 3, 1}, {2, 4, 5, 3} },
+		{ {0, 1, 2, 3}, {2, 3, 4, 5} },
+		{ {0}, {1} },
+		{ {1, 0, 0, 0}, {1, 0, 0, 0} });
 }
 
 bool test_mesh_writer_parallel()
@@ -153,6 +168,8 @@ bool test_mesh_writer_parallel()
 	for (auto& si : subdomain_info_on_this_proc)
 		writer.queue_subdomain_for_write(si);
 	writer.start_parallel_write_phase();
+
+	write_subdomain0(writer);
 
 	return true;
 }

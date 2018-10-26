@@ -54,6 +54,14 @@ namespace fea_io
 		/// Every process with the same key will be placed in teh same comm.
 		static void init(int *argc, char ***argv, const int group_key = 0, const bool quiet = true);
 
+		/// Each process pass the same type of object on this call, and whatever is on the root
+		/// process will get distributed out to all of the others so the object passed to this
+		/// method will have the same value (even if it is a struct) across all processors.
+		/// Specialization for non-fundamental types (i.e. sizeof(T) would not yield the number of bytes needed)
+		/// For this specialization, serialization is required, so the object must be convertable to JSON
+		template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type* = nullptr>
+		static void update_from_root(T& obj_on_this_proc, const bool use_local_comm = true);
+
 		/// This method will gather a vector from each process to the root process
 		/// of the communicator specified.  If use_local_comm is used, then the data
 		/// among each group of ranks with the same group_key when init was called
@@ -192,6 +200,44 @@ namespace fea_io
 		}
 	}
 
+	template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type*>
+	inline void fea_io::MPIUtils::update_from_root(T & obj_on_this_proc, const bool use_local_comm)
+	{
+		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+
+		// Select which comm to use for all MPI operations in this call
+		MPI_Comm comm = use_local_comm ? state.local_comm : MPI_COMM_WORLD;
+		// Get information about the MPI communicator
+		int comm_size;
+		MPI_Comm_size(comm, &comm_size);
+		int comm_rank;
+		MPI_Comm_rank(comm, &comm_rank);
+
+		std::vector<std::uint8_t> serialized_object;
+		int serialized_object_size;
+		if (comm_rank == 0) {
+			// Create a JSON array from the object
+			json j = obj_on_this_proc;
+			// Serialize the JSON data using CBOR (concise bindary object
+			// representation), which will be communicated over MPI
+			serialized_object = json::to_cbor(j);
+			serialized_object_size = static_cast<int>(serialized_object.size());
+			// First broadcast the size
+			MPI_Bcast(&serialized_object_size, 1, MPI_INT, 0, comm);
+			// Now broadcast the data
+			MPI_Bcast(&serialized_object[0], serialized_object_size, MPI_CHAR, 0, comm);
+		}
+		else {
+			// First get the serialized object size
+			MPI_Bcast(&serialized_object_size, 1, MPI_INT, 0, comm);
+			// Now get the serialized data
+			MPI_Bcast(&serialized_object[0], serialized_object_size, MPI_CHAR, 0, comm);
+			// Finally, deserialize the data
+			json j = json::from_cbor(serialized_object);
+			obj_on_this_proc = j;
+		}
+	}
+
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline static std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
 	{
@@ -275,7 +321,7 @@ namespace fea_io
 		num_bytes_for_each_object.reserve(data_from_this_proc.size());
 		std::vector<std::uint8_t> serialized_data;
 		for (auto& obj : data_from_this_proc) {
-			// Create a JSON array from the subdomain info objects
+			// Create a JSON array from the objects
 			json j = obj;
 			// Serialize the JSON data using CBOR (concise bindary object
 			// representation), which will be communicated over MPI

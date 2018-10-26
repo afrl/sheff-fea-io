@@ -142,7 +142,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\source\IOUtils.h" />
+    <ClInclude Include="..\..\source\MeshEnums.h" />
+    <ClInclude Include="..\..\source\MeshInfoStructs.h" />
     <ClInclude Include="..\..\source\MeshWriter.h" />
+    <ClInclude Include="..\..\source\MPIUtils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\main.cpp" />
