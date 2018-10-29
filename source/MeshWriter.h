@@ -42,13 +42,22 @@ namespace fea_io
 			Finalized
 		};
 
-		// Only constructor to use.
+		MeshWriter(const GlobalIndex total_num_nodes,
+			const GlobalIndex total_num_elements,
+			const LocalIndex dimensionality,
+			const std::array<CoordType, 6> extent,
+			const LocalIndex num_constituents,
+			const std::vector<LocalIndex> constituent_ids,
+			const std::vector<std::string> constituent_names,
+			const WriteMode& write_mode,
+			const std::string file_path);
+
 		MeshWriter(const MeshHeader<GlobalIndex, LocalIndex, CoordType>& header,
 			const WriteMode& write_mode,
 			const std::string file_path);
 
-		// if in parallel mode, then this needs to be called for each subdomain
-		// before writing begins.  An error will be thrown otherwise.
+		/// If in parallel mode, then this needs to be called for each subdomain
+		/// before writing begins.  An error will be thrown otherwise.
 		void queue_subdomain_for_write(const SubdomainInfo<GlobalIndex, LocalIndex, CoordType>& subdomain_info);
 
 		// TODO document
@@ -93,6 +102,26 @@ namespace fea_io
 		/// Returns the total number of bytes needed for the mesh file.
 		std::streamoff calculate_offsets();
 	};
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	inline MeshWriter<GlobalIndex, LocalIndex, CoordType>::MeshWriter(const GlobalIndex total_num_nodes, const GlobalIndex total_num_elements, const LocalIndex dimensionality, const std::array<CoordType, 6> extent, const LocalIndex num_constituents, const std::vector<LocalIndex> constituent_ids, const std::vector<std::string> constituent_names, const WriteMode & write_mode, const std::string file_path)
+	{
+		header_.total_num_nodes = total_num_nodes;
+		header_.total_num_elements = total_num_elements;
+		header_.dimensionality = dimensionality;
+		header_.extent = extent;
+		header_.num_constituents = num_constituents;
+		header_.constituent_ids = constituent_ids;
+		header_.constituent_names = constituent_names;
+
+		write_mode_ = write_mode;
+		file_path_ = file_path;
+
+		if (write_mode == WriteMode::Serial)
+			write_state_ = WriteState::WritePhase;
+		else if (write_mode == WriteMode::Parallel)
+			write_state_ = WriteState::QueuePhase;
+	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	inline MeshWriter<GlobalIndex, LocalIndex, CoordType>::MeshWriter(const MeshHeader<GlobalIndex, LocalIndex, CoordType>& header, const WriteMode & write_mode, const std::string file_path)
