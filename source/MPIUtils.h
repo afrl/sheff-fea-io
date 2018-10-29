@@ -230,6 +230,7 @@ namespace fea_io
 		else {
 			// First get the serialized object size
 			MPI_Bcast(&serialized_object_size, 1, MPI_INT, 0, comm);
+			serialized_object.resize(serialized_object_size);
 			// Now get the serialized data
 			MPI_Bcast(&serialized_object[0], serialized_object_size, MPI_CHAR, 0, comm);
 			// Finally, deserialize the data
