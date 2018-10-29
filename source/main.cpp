@@ -63,60 +63,32 @@ bool test_gather_vectors_int()
 		return true;
 }
 
-void get_test_subdomain_info(MeshHeader<int16_t, int16_t, double>& header, std::vector<SubdomainInfo<int16_t, int16_t, double>>& subdomains)
+void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, double>& meta_info, std::vector<SubdomainInfo<int16_t, int16_t, double>>& subdomains)
 {
-	header = {
+	meta_info = {
 		9,
 		4,
 		2,
-		{0, 0, 0, 1, 1, 0},
-		2,
-		{0, 1},
-		{"Constituent0", "Constituent1"},
+		{ {0, 0, 0}, {1, 1, 0} },
+		{ { 0, "Constituent0", LCSAssignment::Constituent, LCSParameterization::Quaternion },
+		  { 1, "Constituent1", LCSAssignment::Element, LCSParameterization::Quaternion } },
 		2,
 		{}
 	};
 
 	DataTypeSizes<int16_t, int16_t, double> data_types;
 
-	SubconstituentInfo<int16_t, int16_t, double> sc0 = {
-		0,
-		4,
-		1,
-		LCSAssignment::Constituent,
-		LCSParameterization::Quaternion
-	};
-
-	SubconstituentInfo<int16_t, int16_t, double> sc1 = {
-		1,
-		4,
-		1,
-		LCSAssignment::Constituent,
-		LCSParameterization::Quaternion
-	};
-
-	SubconstituentInfo<int16_t, int16_t, double> sc2 = {
-		2,
-		4,
-		1,
-		LCSAssignment::Element,
-		LCSParameterization::Quaternion
-	};
-
-	SubconstituentInfo<int16_t, int16_t, double> sc3 = {
-		3,
-		4,
-		1,
-		LCSAssignment::Element,
-		LCSParameterization::Quaternion
-	};
+	SubconstituentInfo<int16_t> sc0 = { 0, 4, 1 };
+	SubconstituentInfo<int16_t> sc1 = { 0, 4, 1 };
+	SubconstituentInfo<int16_t> sc2 = { 1, 4, 1 };
+	SubconstituentInfo<int16_t> sc3 = { 1, 4, 1 };
 
 	SubdomainInfo<int16_t, int16_t, double> subdomain0 = {
 		0,
 		6,
 		2,
 		8,
-		{0, 0, 0, 0.5, 0.5, 0},
+		{ {0, 0, 0}, {0.5, 0.5, 0} },
 		2,
 		{ sc0, sc2 }
 	};
@@ -126,7 +98,7 @@ void get_test_subdomain_info(MeshHeader<int16_t, int16_t, double>& header, std::
 		6,
 		2,
 		8,
-		{0.5, 0.5, 0, 1, 1, 0},
+		{ {0.5, 0.5, 0}, {1, 1, 0} },
 		2,
 		{ sc1, sc3 }
 	};
@@ -134,11 +106,10 @@ void get_test_subdomain_info(MeshHeader<int16_t, int16_t, double>& header, std::
 	subdomains = { subdomain0, subdomain1 };
 }
 
-void write_subdomain0(MeshWriter<int16_t, int16_t, double>& writer,
-	const SubdomainInfo<int16_t, int16_t, double>& subdomain_info0)
+void write_subdomain0(MeshWriter<int16_t, int16_t, double>& writer)
 {
 	writer.write_subdomain(
-		subdomain_info0,
+		0,
 		{ 0, 1, 3, 4, 6, 7 },
 		{ 0, 0, 0, 0, 0, 0 },
 		{ 0, 1, 0.5, 1, 0, 0.5, 0.5, 0.5, 0, 0, 0.5, 0 },
@@ -146,16 +117,16 @@ void write_subdomain0(MeshWriter<int16_t, int16_t, double>& writer,
 		{ 0, 0 },
 		{ ElementType::Q2D4N, ElementType::Q2D4N },
 		{ {0, 2, 3, 1}, {2, 4, 5, 3} },
+		{0, 1},
 		{ {0, 1, 2, 3}, {2, 3, 4, 5} },
 		{ {0}, {1} },
 		{ {1, 0, 0, 0}, {1, 0, 0, 0} });
 }
 
-void write_subdomain1(MeshWriter<int16_t, int16_t, double>& writer,
-	const SubdomainInfo<int16_t, int16_t, double>& subdomain_info1)
+void write_subdomain1(MeshWriter<int16_t, int16_t, double>& writer)
 {
 	writer.write_subdomain(
-		subdomain_info1,
+		1,
 		{ 1, 2, 4, 5, 7, 8 },
 		{ 0, 1, 0, 1, 0, 1 },
 		{ 0.5, 1, 1, 1, 0.5, 0.5, 1, 0.5, 0.5, 0, 1, 0 },
@@ -163,6 +134,7 @@ void write_subdomain1(MeshWriter<int16_t, int16_t, double>& writer,
 		{ 1, 1 },
 		{ ElementType::Q2D4N, ElementType::Q2D4N },
 		{ { 0, 2, 3, 1 }, { 2, 4, 5, 3 } },
+		{ 0, 1 },
 		{ { 0, 1, 2, 3 }, { 2, 3, 4, 5 } },
 		{ { 0 }, { 1 } },
 		{ { 1, 0, 0, 0 }, { 1, 0, 0, 0 } });
@@ -170,16 +142,16 @@ void write_subdomain1(MeshWriter<int16_t, int16_t, double>& writer,
 
 bool test_mesh_writer_serial()
 {
-	MeshHeader<int16_t, int16_t, double> header;
+	MeshMetaInfo<int16_t, int16_t, double> meta_info;
 	std::vector<SubdomainInfo<int16_t, int16_t, double>> all_subdomains;
-	get_test_subdomain_info(header, all_subdomains);
+	get_test_subdomain_info(meta_info, all_subdomains);
 
-	MeshWriter<int16_t, int16_t, double> writer(header,
-		MeshWriter<int16_t, int16_t, double>::WriteMode::Serial,
-		"test_serial");
+	MeshWriter<int16_t, int16_t, double> writer("test_serial",
+		meta_info,
+		WriteMode::Serial);
 
-	write_subdomain0(writer, all_subdomains[0]);
-	write_subdomain1(writer, all_subdomains[1]);
+	write_subdomain0(writer);
+	write_subdomain1(writer);
 
 	writer.finalize();
 
@@ -188,9 +160,9 @@ bool test_mesh_writer_serial()
 
 bool test_mesh_writer_parallel()
 {
-	MeshHeader<int16_t, int16_t, double> header;
+	MeshMetaInfo<int16_t, int16_t, double> meta_info;
 	std::vector<SubdomainInfo<int16_t, int16_t, double>> all_subdomains;
-	get_test_subdomain_info(header, all_subdomains);
+	get_test_subdomain_info(meta_info, all_subdomains);
 
 	std::vector<SubdomainInfo<int16_t, int16_t, double>> subdomain_info_on_this_proc;
 	if (MPIUtils::get_num_local_ranks() > 1) {
@@ -202,22 +174,20 @@ bool test_mesh_writer_parallel()
 	else
 		subdomain_info_on_this_proc = all_subdomains;
 
-	MeshWriter<int16_t, int16_t, double> writer(header,
-		MeshWriter<int16_t, int16_t, double>::WriteMode::Parallel,
-		"test_parallel");
+	MeshWriter<int16_t, int16_t, double> writer("test_parallel", meta_info, WriteMode::Parallel);
 	for (auto& si : subdomain_info_on_this_proc)
 		writer.queue_subdomain_for_write(si);
 	writer.start_parallel_write_phase();
 
 	if (MPIUtils::get_num_local_ranks() > 1) {
 		if (MPIUtils::get_local_rank() == 0)
-			write_subdomain0(writer, subdomain_info_on_this_proc[0]);
+			write_subdomain0(writer);
 		else if (MPIUtils::get_local_rank() == 1)
-			write_subdomain1(writer, subdomain_info_on_this_proc[0]);
+			write_subdomain1(writer);
 	}
 	else {
-		write_subdomain0(writer, subdomain_info_on_this_proc[0]);
-		write_subdomain1(writer, subdomain_info_on_this_proc[1]);
+		write_subdomain0(writer);
+		write_subdomain1(writer);
 	}
 
 	writer.finalize();
@@ -240,18 +210,22 @@ void illustrative_serial()
 	// about the mesh.  Note: we could specialize a class for serial and
 	// one for parallel writing.  It would simplify how much you need to
 	// give it for the serial case.  Would that be preferrable?
-	MeshWriter writer(9, // total # nodes
+	MeshWriter writer(
+		"/some/filepath/a_cool_mesh", // Where to put the json/binary files
+		9, // total # nodes
 		4, // total # elements
 		2, // dimensionality
-		{ 0, 0, 0, 1, 1, 0 }, // extent
-		2, // # constituents
+		{ { 0, 0, 0}, {1, 1, 0} }, // extent
 		{ 0, 1 }, // constituent IDs
 		{ "Constituent0", "Constituent1" }, // constituent names
+		{ LCSAssignment::Constituent, LCSAssignment::Element }, // level at which local
+		// coordinate systems are assigned
+		{ LCSParameterization::Quaternion, LCSParameterization::Quaternion }, // type
+		// of parameterization used for the local coordinate sytem
 		2, // # subdomains
-		MeshWriter::WriteMode::Serial, // The flag for serial vs parallel
-		"/some/filepath/a_cool_mesh"); // Where to put the json/binary files
-	writer.write_subdomain(/* A bunch of parameters describing the mesh
-						   and local coordinate systems.*/);
+		WriteMode::Serial); // The flag for serial vs parallel
+	//writer.write_subdomain(/* A bunch of parameters describing the mesh
+	//					   and local coordinate systems.*/);
 	writer.finalize();
 }
 
@@ -271,16 +245,20 @@ void illustrative_parallel()
 	// about the mesh.  Note: we could specialize a class for serial and
 	// one for parallel writing.  It would simplify how much you need to
 	// give it for the serial case.  Would that be preferrable?
-	MeshWriter writer(9, // total # nodes
+	MeshWriter writer(
+		"/some/filepath/a_cool_mesh", // Where to put the json/binary files
+		9, // total # nodes
 		4, // total # elements
 		2, // dimensionality
-		{ 0, 0, 0, 1, 1, 0 }, // extent
-		2, // # constituents (for BSAM it is basically a cluster)
+		{ { 0, 0, 0}, {1, 1, 0} }, // extent
 		{ 0, 1 }, // constituent IDs
 		{ "Constituent0", "Constituent1" }, // constituent names
+		{ LCSAssignment::Constituent, LCSAssignment::Element }, // level at which local
+		// coordinate systems are assigned
+		{ LCSParameterization::Quaternion, LCSParameterization::Quaternion }, // type
+		// of parameterization used for the local coordinate sytem
 		2, // # subdomains
-		MeshWriter::WriteMode::Parallel, // The flag for serial vs parallel
-		"/some/filepath/a_cool_mesh"); // Where to put the json/binary files
+		WriteMode::Parallel); // The flag for serial vs parallel
 
 	// Before you write, you have to queue all the subdomains so the
 	// processors can figure out how to preallocate the file and write
@@ -288,8 +266,8 @@ void illustrative_parallel()
 	// they are responsible for writing.  This means 4 processors could
 	// write however many subdomains they want, or you can have each processor
 	// write one subdomain each.
-	writer.queue_subdomain_for_write(/* Several parameters describing
-									 high-level info about the subdomain */);
+	//writer.queue_subdomain_for_write(/* Several parameters describing
+	//								 high-level info about the subdomain */);
 	
 	// You call this to trigger the MPI communciation and preallocation of
 	// the file.  It could be automatically called on the first write call.
@@ -297,8 +275,8 @@ void illustrative_parallel()
 	writer.start_parallel_write_phase();
 
 	// Each processor calls this for each subdomain they should write
-	writer.write_subdomain(/* A bunch of parameters describing the mesh
-						   and local coordinate systems.*/);
+	//writer.write_subdomain(/* A bunch of parameters describing the mesh
+	//					   and local coordinate systems.*/);
 
 	// Closes the binary file and writes the accompaning JSON file
 	writer.finalize();
@@ -323,15 +301,15 @@ int main(int argc, char **argv)
 
 	/*
 	json j;
-	j["header"] = header;
+	j["meta_info"] = meta_info;
 	j["data_type_sizes"] = data_types;
 	j["subdomains"] = subdomains;
 
 	std::cout << std::setw(4) << j << std::endl;
 
 	// Test conversions
-	MeshHeader<int16_t, int16_t, double> header_check = j["header"];
-	assert(header == header_check);
+	MeshMetaInfo<int16_t, int16_t, double> meta_info_check = j["meta_info"];
+	assert(meta_info == meta_info_check);
 	*/
 
 	MPIUtils::finalize();

@@ -79,12 +79,14 @@ namespace fea_io
 	}
 
 	/// An enum describing what level the local coordinate system will be
-	/// assigned for a component.  This could be:
-	/// - Component: one LCS for the entire component
-	/// - Element: one LCS for each element in the component
-	/// - Node: one LCS for each node in the component
+	/// assigned for a constituent.  This could be:
+	/// - None: no LCS for the entire constituent
+	/// - Constituent: one LCS for the entire constituent
+	/// - Element: one LCS for each element in the constituent
+	/// - Node: one LCS for each node in the constituent
 	enum class LCSAssignment : char
 	{
+		None,
 		Constituent,
 		Element,
 		Node

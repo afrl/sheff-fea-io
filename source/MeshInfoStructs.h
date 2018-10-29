@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -13,61 +14,145 @@ namespace fea_io
 {
 	using json = nlohmann::json;
 
-	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	struct MeshHeader
+	template<typename LocalIndex>
+	struct ConstituentMetaInfo
 	{
-		// Top-level mesh statistics
+		LocalIndex id;
+		std::string name;
+		LCSAssignment lcs_assignment;
+		LCSParameterization lcs_parameterization;
+
+		auto tie() const {
+			return std::tie(id, name, lcs_assignment, lcs_parameterization);
+		}
+	};
+
+	template<typename LocalIndex>
+	void to_json(json& j, const ConstituentMetaInfo<LocalIndex>& h)
+	{
+		j = json{ {"id", h.id},
+			{"name", h.name},
+			{"lcs_assignment", h.lcs_assignment},
+			{"lcs_parameterization", h.lcs_parameterization}
+		};
+	}
+
+	template<typename LocalIndex>
+	void from_json(const json& j, ConstituentMetaInfo<LocalIndex>& h)
+	{
+		j.at("id").get_to(h.id);
+		j.at("name").get_to(h.name);
+		j.at("lcs_assignment").get_to(h.lcs_assignment);
+		j.at("lcs_parameterization").get_to(h.lcs_parameterization);
+	}
+
+	template<typename CoordType>
+	struct Extent
+	{
+		std::array<CoordType, 3> min;
+		std::array<CoordType, 3> max;
+
+		CoordType& x_min() { return min[0]; }
+		CoordType& y_min() { return min[1]; }
+		CoordType& z_min() { return min[2]; }
+		CoordType& x_max() { return max[0]; }
+		CoordType& y_max() { return max[1]; }
+		CoordType& z_max() { return max[2]; }
+
+		const CoordType& x_min() const { return min[0]; }
+		const CoordType& y_min() const { return min[1]; }
+		const CoordType& z_min() const { return min[2]; }
+		const CoordType& x_max() const { return max[0]; }
+		const CoordType& y_max() const { return max[1]; }
+		const CoordType& z_max() const { return max[2]; }
+
+		Extent() {
+			min = { std::numeric_limits<CoordType>::max(),
+				std::numeric_limits<CoordType>::max(),
+				std::numeric_limits<CoordType>::max() };
+			max = { std::numeric_limits<CoordType>::min(),
+				std::numeric_limits<CoordType>::min(),
+				std::numeric_limits<CoordType>::min() };
+		}
+		Extent(const std::array<CoordType, 3> min_a, const std::array<CoordType, 3> max_a) {
+			min = min_a;
+			max = max_a;
+		}
+
+		auto tie() const {
+			return std::tie(min, max);
+		}
+	};
+
+	template<typename CoordType>
+	void to_json(json& j, const Extent<CoordType>& e)
+	{
+		j = json{ {"x_min", e.x_min()},
+			{"y_min", e.y_min()},
+			{"z_min", e.z_min()},
+			{"x_max", e.x_max()},
+			{"y_max", e.y_max()},
+			{"z_max", e.z_max()}
+		};
+	}
+
+	template<typename CoordType>
+	void from_json(const json& j, Extent<CoordType>& e)
+	{
+		j.at("x_min").get_to(e.x_min());
+		j.at("y_min").get_to(e.y_min());
+		j.at("z_min").get_to(e.z_min());
+		j.at("x_max").get_to(e.x_max());
+		j.at("y_max").get_to(e.y_max());
+		j.at("z_max").get_to(e.z_max());
+	}
+	
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	struct MeshMetaInfo
+	{
 		GlobalIndex total_num_nodes;
 		GlobalIndex total_num_elements;
 		LocalIndex dimensionality;
-		std::array<CoordType, 6> extent;
-		// Physical division of domain
-		LocalIndex num_constituents;
-		std::vector<LocalIndex> constituent_ids;
-		std::vector<std::string> constituent_names;
-		// Computational division of domain
+		Extent<CoordType> extent;
+		std::vector<ConstituentMetaInfo<LocalIndex>> constituents;
 		LocalIndex total_num_subdomains;
 		std::vector<std::streamoff> subdomain_offsets;
 
 		auto tie() const {
 			return std::tie(total_num_nodes,
 				total_num_elements, dimensionality, extent,
-				num_constituents, constituent_ids, constituent_names,
-				total_num_subdomains, subdomain_offsets);
+				constituents, total_num_subdomains, subdomain_offsets);
 		}
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	bool operator ==(const MeshHeader<GlobalIndex, LocalIndex, CoordType>& lhs, const MeshHeader<GlobalIndex, LocalIndex, CoordType>& rhs)
+	bool operator ==(const MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& lhs, const MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& rhs)
 	{
 		return lhs.tie() == rhs.tie();
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void to_json(json& j, const MeshHeader<GlobalIndex, LocalIndex, CoordType>& h)
+	void to_json(json& j, const MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& h)
 	{
 		j = json{ {"total_num_nodes", h.total_num_nodes},
 			{"total_num_elements", h.total_num_elements},
 			{"dimensionality", h.dimensionality},
 			{"extent", h.extent},
-			{"num_constituents", h.num_constituents},
-			{"constituent_ids", h.constituent_ids},
-			{"constituent_names", h.constituent_names},
+			{"constituents", h.constituents},
 			{"total_num_subdomains", h.total_num_subdomains},
 			{"subdomain_offsets", h.subdomain_offsets}
 		};
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void from_json(const json& j, MeshHeader<GlobalIndex, LocalIndex, CoordType>& h)
+	void from_json(const json& j, MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& h)
 	{
 		j.at("total_num_nodes").get_to(h.total_num_nodes);
 		j.at("total_num_elements").get_to(h.total_num_elements);
 		j.at("dimensionality").get_to(h.dimensionality);
 		j.at("extent").get_to(h.extent);
-		j.at("num_constituents").get_to(h.num_constituents);
-		j.at("constituent_ids").get_to(h.constituent_ids);
-		j.at("constituent_names").get_to(h.constituent_names);
+		j.at("constituents").get_to(h.constituents);
 		j.at("total_num_subdomains").get_to(h.total_num_subdomains);
 		j.at("subdomain_offsets").get_to(h.subdomain_offsets);
 	}
@@ -97,78 +182,57 @@ namespace fea_io
 		j.at("coord_type_size").get_to(dti.coord_type_size);
 	}
 
-	/// This struct describes all of the informaiton needed to know
-	/// the size on disk needed for a constituent.
-	/// The data within the binary mesh file is expected to take the form:
-	/// - Constituent ID (LocalIndex)
-	/// - # nodes in constituent (LocalIndex)
-	/// - List of node indices that appears in any element in the
-	///   constituent (LocalIndex * # nodes in the constituent)
-	///   Note: must contain no duplicates
-	/// - # nodes in elements (LocalIndex)
-	/// - List of element indices in the constituent
-	///   (LocalIndex * # nodes in the constituent)
-	/// - Level at which local coordinate systems are assigned (enum : char)
-	/// - Parameterization type of local coordinate systems (enum : char)
-	/// - List of local coordinate system parmaeters (size varies depending
-	///   on the level of assignment and type of parameterization)
-	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	template<typename LocalIndex>
 	struct SubconstituentInfo
 	{
 		LocalIndex constituent_id;
 		LocalIndex num_nodes_in_subconstituent;
 		LocalIndex num_elements_in_subconstituent;
-		LCSAssignment lcs_assignment;
-		LCSParameterization lcs_parameterization;
-
-		/// Returns the number of LCS parameters that will be needed.
-		int get_total_num_lcs_parameters() const {
-			if (lcs_assignment == LCSAssignment::Constituent)
-				return get_num_parameters(lcs_parameterization);
-			else if (lcs_assignment == LCSAssignment::Element)
-				return num_elements_in_subconstituent * get_num_parameters(lcs_parameterization);
-			else if (lcs_assignment == LCSAssignment::Node)
-				return num_nodes_in_subconstituent * get_num_parameters(lcs_parameterization);
-			else
-				throw _MSG_EXCEPT_C("LCS assignment not recognized.");
-		}
-
-		/// Returns the number of bytes needed within the binary mesh file for this constituent
-		/// within a subdomain.  This method is used when the offsets are being calculated.
-		std::streamoff get_size_needed() const {
-			// Figure out the total size on disk needed to store
-			// everything needed for the component.
-			return sizeof(constituent_id)
-				+ sizeof(num_nodes_in_subconstituent)
-				+ num_nodes_in_subconstituent * sizeof(LocalIndex)
-				+ sizeof(num_elements_in_subconstituent)
-				+ num_elements_in_subconstituent * sizeof(LocalIndex)
-				+ sizeof(lcs_assignment)
-				+ sizeof(lcs_parameterization)
-				+ this->get_total_num_lcs_parameters() * sizeof(CoordType);
-		};
 	};
 
-	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void to_json(json& j, const SubconstituentInfo<GlobalIndex, LocalIndex, CoordType>& ci)
+	template<typename LocalIndex>
+	void to_json(json& j, const SubconstituentInfo<LocalIndex>& ci)
 	{
 		j = json{ {"constituent_id", ci.constituent_id},
 			{"num_nodes_in_subconstituent", ci.num_nodes_in_subconstituent},
-			{"num_elements_in_subconstituent", ci.num_elements_in_subconstituent},
-			{"lcs_assignment", ci.lcs_assignment},
-			{"lcs_parameterization", ci.lcs_parameterization}
+			{"num_elements_in_subconstituent", ci.num_elements_in_subconstituent}
 		};
 	}
 
-	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void from_json(const json& j, SubconstituentInfo<GlobalIndex, LocalIndex, CoordType>& ci)
+	template<typename LocalIndex>
+	void from_json(const json& j, SubconstituentInfo<LocalIndex>& ci)
 	{
 		j.at("constituent_id").get_to(ci.constituent_id);
 		j.at("num_nodes_in_subconstituent").get_to(ci.num_nodes_in_subconstituent);
 		j.at("num_elements_in_subconstituent").get_to(ci.num_elements_in_subconstituent);
-		j.at("lcs_assignment").get_to(ci.lcs_assignment);
-		j.at("lcs_parameterization").get_to(ci.lcs_parameterization);
 	}
+
+	/// Returns the number of bytes needed within the binary mesh file for this constituent
+	/// within a subdomain.  This method is used when the offsets are being calculated.
+	template<typename LocalIndex, typename CoordType>
+	static std::streamoff get_size_for_subconstituent(
+		const LocalIndex num_nodes_in_subconstituent,
+		const LocalIndex num_elements_in_subconstituent,
+		const LCSAssignment lcs_assignment,
+		const LCSParameterization lcs_parameterization)
+	{
+		std::streamoff num_lcs_parameters = 0;
+		if (lcs_assignment == LCSAssignment::Constituent)
+			num_lcs_parameters = get_num_parameters(lcs_parameterization);
+		else if (lcs_assignment == LCSAssignment::Element)
+			num_lcs_parameters = num_elements_in_subconstituent * get_num_parameters(lcs_parameterization);
+		else if (lcs_assignment == LCSAssignment::Node)
+			num_lcs_parameters = num_nodes_in_subconstituent * get_num_parameters(lcs_parameterization);
+		else
+			throw _MSG_EXCEPT("LCS assignment not recognized.");
+
+		return sizeof(LocalIndex) // constituent id
+			+ sizeof(num_nodes_in_subconstituent)
+			+ num_nodes_in_subconstituent * sizeof(LocalIndex)
+			+ sizeof(num_elements_in_subconstituent)
+			+ num_elements_in_subconstituent * sizeof(LocalIndex)
+			+ num_lcs_parameters * sizeof(CoordType);
+	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	struct SubdomainInfo
@@ -177,27 +241,37 @@ namespace fea_io
 		LocalIndex num_nodes;
 		LocalIndex num_elements;
 		LocalIndex total_num_connectivity_entries;
-		std::array<CoordType, 6> extent;
+		Extent<CoordType> extent;
 		LocalIndex num_constituents;
-		std::vector<SubconstituentInfo<GlobalIndex, LocalIndex, CoordType>> subconstituents;
+		std::vector<SubconstituentInfo<LocalIndex>> subconstituents;
 
 		/// Returns the number of bytes needed within the binary mesh file
 		/// for this subdomain.  This method is used when the offsets are
 		/// being calculated.
-		std::streamoff get_size_needed(const LocalIndex dimensionality) const {
+		std::streamoff get_size_needed(const MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& meta_info) const {
 			// Compute the sizes individually to allow debuggers to check values, but a release compile will
 			// optimize most of the code away.
 			const std::streamoff size_for_subdomain_header = sizeof(subdomain_index) + sizeof(num_nodes) + sizeof(num_elements) + sizeof(extent);
 			// Size of nodes accounts for global id, parent subdomain, and coordintes of each node
-			const std::streamoff size_for_nodes = num_nodes * (sizeof(GlobalIndex) + sizeof(LocalIndex) + dimensionality * sizeof(CoordType));
+			const std::streamoff size_for_nodes = num_nodes * (sizeof(GlobalIndex) + sizeof(LocalIndex) + meta_info.dimensionality * sizeof(CoordType));
 			// Size of element accounts for global id, type, parent subdomain, and connectivity of each element
 			const std::streamoff size_for_elements = num_elements * (sizeof(GlobalIndex) + sizeof(ElementType) + sizeof(LocalIndex))
 				+ total_num_connectivity_entries * sizeof(LocalIndex);
 			const std::streamoff size_for_constituent_header = sizeof(num_constituents) + sizeof(std::streamoff) * num_constituents;
 			// Figures out how much space will be needed for the subconstitutents
 			std::streamoff size_for_subconstituents = 0;
-			for (auto& subconstituent : subconstituents)
-				size_for_subconstituents += subconstituent.get_size_needed();
+			for (auto& subconstituent : subconstituents) {
+				// Note: it was already tested that the constituent id exists in the meta_info
+				auto constituent_iter = std::find_if(meta_info.constituents.begin(), meta_info.constituents.end(),
+					[id = subconstituent.constituent_id](const ConstituentMetaInfo<LocalIndex>& x) -> bool {
+					return x.id == id;
+				});
+				if (constituent_iter == meta_info.constituents.end())
+					throw _MSG_EXCEPT_C("In subdomain " + std::to_string(subdomain_index) + ", constituent ID " + std::to_string(subconstituent.constituent_id) + " was given, but it was not included as a constituent when constructed.");
+
+				size_for_subconstituents += get_size_for_subconstituent<LocalIndex, CoordType>(subconstituent.num_nodes_in_subconstituent,
+					subconstituent.num_elements_in_subconstituent, constituent_iter->lcs_assignment, constituent_iter->lcs_parameterization);
+			}
 
 			// Figure out the total size on disk needed to store
 			// everything needed for the subdomain.
