@@ -2,6 +2,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "Exceptions.h"
+
 namespace fea_io
 {
 	using json = nlohmann::json;
@@ -79,18 +81,36 @@ namespace fea_io
 	}
 
 	/// An enum describing what level the local coordinate system will be
-	/// assigned for a constituent.  This could be:
-	/// - None: no LCS for the entire constituent
-	/// - Constituent: one LCS for the entire constituent
-	/// - Element: one LCS for each element in the constituent
-	/// - Node: one LCS for each node in the constituent
+	/// assigned for a component.  This could be:
+	/// - None: no LCS for the entire component
+	/// - Component: one LCS for the entire component
+	/// - Element: one LCS for each element in the component
+	/// - Node: one LCS for each node in the component
 	enum class LCSAssignment : char
 	{
 		None,
-		Constituent,
+		Component,
 		Element,
 		Node
 	};
+
+	std::string to_friendly_name(const LCSAssignment& lcs_a)
+	{
+		if (lcs_a == LCSAssignment::None) return "None";
+		else if (lcs_a == LCSAssignment::Component) return "Component";
+		else if (lcs_a == LCSAssignment::Element) return "Element";
+		else if (lcs_a == LCSAssignment::Node) return "Node";
+		else throw _MSG_EXCEPT("LCSAssignment " + std::to_string(static_cast<std::underlying_type<ElementType>::type>(lcs_a)) + " not recognized.");
+	}
+
+	LCSAssignment assignment_from_name(const std::string& name)
+	{
+		if (name == "None") return LCSAssignment::None;
+		else if (name == "Component") return LCSAssignment::Component;
+		else if (name == "Element") return LCSAssignment::Element;
+		else if (name == "Node") return LCSAssignment::Node;
+		else throw _MSG_EXCEPT("LCSAssignment " + name + " not recognized.");
+	}
 
 	/// An enum describing what parametrization will be used to describe
 	/// a local coordinate system as a rotation from the global coordinate
@@ -118,4 +138,18 @@ namespace fea_io
 		else
 			throw 0; // TODO throw a real error
 	};
+
+	std::string to_friendly_name(const LCSParameterization& lcs_p)
+	{
+		if (lcs_p == LCSParameterization::Quaternion) return "Quaternion";
+		else if (lcs_p == LCSParameterization::AxisAngle) return "AxisAngle";
+		else throw _MSG_EXCEPT("LCSParameterization " + std::to_string(static_cast<std::underlying_type<ElementType>::type>(lcs_p)) + " not recognized.");
+	}
+
+	LCSParameterization parameterizaiton_from_name(const std::string& name)
+	{
+		if (name == "Quaternion") return LCSParameterization::Quaternion;
+		else if (name == "AxisAngle") return LCSParameterization::AxisAngle;
+		else throw _MSG_EXCEPT("LCSParameterization " + name + " not recognized.");
+	}
 }

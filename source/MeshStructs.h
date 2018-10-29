@@ -15,7 +15,7 @@ namespace fea_io
 	using json = nlohmann::json;
 
 	template<typename LocalIndex>
-	struct ConstituentMetaInfo
+	struct ComponentMetaInfo
 	{
 		LocalIndex id;
 		std::string name;
@@ -28,22 +28,22 @@ namespace fea_io
 	};
 
 	template<typename LocalIndex>
-	void to_json(json& j, const ConstituentMetaInfo<LocalIndex>& h)
+	void to_json(json& j, const ComponentMetaInfo<LocalIndex>& h)
 	{
 		j = json{ {"id", h.id},
 			{"name", h.name},
-			{"lcs_assignment", h.lcs_assignment},
-			{"lcs_parameterization", h.lcs_parameterization}
+			{"lcs_assignment", to_friendly_name(h.lcs_assignment)},
+			{"lcs_parameterization", to_friendly_name(h.lcs_parameterization)}
 		};
 	}
 
 	template<typename LocalIndex>
-	void from_json(const json& j, ConstituentMetaInfo<LocalIndex>& h)
+	void from_json(const json& j, ComponentMetaInfo<LocalIndex>& h)
 	{
 		j.at("id").get_to(h.id);
 		j.at("name").get_to(h.name);
-		j.at("lcs_assignment").get_to(h.lcs_assignment);
-		j.at("lcs_parameterization").get_to(h.lcs_parameterization);
+		h.lcs_assignment = assignment_from_name(j.at("lcs_assignment").get<std::string>());
+		h.lcs_parameterization = parameterizaiton_from_name(j.at("lcs_parameterization").get<std::string>());
 	}
 
 	template<typename CoordType>
@@ -115,14 +115,14 @@ namespace fea_io
 		GlobalIndex total_num_elements;
 		LocalIndex dimensionality;
 		Extent<CoordType> extent;
-		std::vector<ConstituentMetaInfo<LocalIndex>> constituents;
-		LocalIndex total_num_subdomains;
-		std::vector<std::streamoff> subdomain_offsets;
+		std::vector<ComponentMetaInfo<LocalIndex>> components;
+		LocalIndex total_num_partitions;
+		std::vector<std::streamoff> partition_offsets;
 
 		auto tie() const {
 			return std::tie(total_num_nodes,
 				total_num_elements, dimensionality, extent,
-				constituents, total_num_subdomains, subdomain_offsets);
+				components, total_num_partitions, partition_offsets);
 		}
 	};
 
@@ -139,9 +139,9 @@ namespace fea_io
 			{"total_num_elements", h.total_num_elements},
 			{"dimensionality", h.dimensionality},
 			{"extent", h.extent},
-			{"constituents", h.constituents},
-			{"total_num_subdomains", h.total_num_subdomains},
-			{"subdomain_offsets", h.subdomain_offsets}
+			{"components", h.components},
+			{"total_num_partitions", h.total_num_partitions},
+			{"partition_offsets", h.partition_offsets}
 		};
 	}
 
@@ -152,9 +152,9 @@ namespace fea_io
 		j.at("total_num_elements").get_to(h.total_num_elements);
 		j.at("dimensionality").get_to(h.dimensionality);
 		j.at("extent").get_to(h.extent);
-		j.at("constituents").get_to(h.constituents);
-		j.at("total_num_subdomains").get_to(h.total_num_subdomains);
-		j.at("subdomain_offsets").get_to(h.subdomain_offsets);
+		j.at("components").get_to(h.components);
+		j.at("total_num_partitions").get_to(h.total_num_partitions);
+		j.at("partition_offsets").get_to(h.partition_offsets);
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
@@ -183,128 +183,163 @@ namespace fea_io
 	}
 
 	template<typename LocalIndex>
-	struct SubconstituentInfo
+	struct SubcomponentInfo
 	{
-		LocalIndex constituent_id;
-		LocalIndex num_nodes_in_subconstituent;
-		LocalIndex num_elements_in_subconstituent;
+		LocalIndex component_id;
+		LocalIndex num_nodes_in_subcomponent;
+		LocalIndex num_elements_in_subcomponent;
 	};
 
 	template<typename LocalIndex>
-	void to_json(json& j, const SubconstituentInfo<LocalIndex>& ci)
+	void to_json(json& j, const SubcomponentInfo<LocalIndex>& ci)
 	{
-		j = json{ {"constituent_id", ci.constituent_id},
-			{"num_nodes_in_subconstituent", ci.num_nodes_in_subconstituent},
-			{"num_elements_in_subconstituent", ci.num_elements_in_subconstituent}
+		j = json{ {"component_id", ci.component_id},
+			{"num_nodes_in_subcomponent", ci.num_nodes_in_subcomponent},
+			{"num_elements_in_subcomponent", ci.num_elements_in_subcomponent}
 		};
 	}
 
 	template<typename LocalIndex>
-	void from_json(const json& j, SubconstituentInfo<LocalIndex>& ci)
+	void from_json(const json& j, SubcomponentInfo<LocalIndex>& ci)
 	{
-		j.at("constituent_id").get_to(ci.constituent_id);
-		j.at("num_nodes_in_subconstituent").get_to(ci.num_nodes_in_subconstituent);
-		j.at("num_elements_in_subconstituent").get_to(ci.num_elements_in_subconstituent);
+		j.at("component_id").get_to(ci.component_id);
+		j.at("num_nodes_in_subcomponent").get_to(ci.num_nodes_in_subcomponent);
+		j.at("num_elements_in_subcomponent").get_to(ci.num_elements_in_subcomponent);
 	}
 
-	/// Returns the number of bytes needed within the binary mesh file for this constituent
-	/// within a subdomain.  This method is used when the offsets are being calculated.
+	/// Returns the number of bytes needed within the binary mesh file for this component
+	/// within a partition.  This method is used when the offsets are being calculated.
 	template<typename LocalIndex, typename CoordType>
-	static std::streamoff get_size_for_subconstituent(
-		const LocalIndex num_nodes_in_subconstituent,
-		const LocalIndex num_elements_in_subconstituent,
+	static std::streamoff get_size_for_subcomponent(
+		const LocalIndex num_nodes_in_subcomponent,
+		const LocalIndex num_elements_in_subcomponent,
 		const LCSAssignment lcs_assignment,
 		const LCSParameterization lcs_parameterization)
 	{
 		std::streamoff num_lcs_parameters = 0;
-		if (lcs_assignment == LCSAssignment::Constituent)
+		if (lcs_assignment == LCSAssignment::Component)
 			num_lcs_parameters = get_num_parameters(lcs_parameterization);
 		else if (lcs_assignment == LCSAssignment::Element)
-			num_lcs_parameters = num_elements_in_subconstituent * get_num_parameters(lcs_parameterization);
+			num_lcs_parameters = num_elements_in_subcomponent * get_num_parameters(lcs_parameterization);
 		else if (lcs_assignment == LCSAssignment::Node)
-			num_lcs_parameters = num_nodes_in_subconstituent * get_num_parameters(lcs_parameterization);
+			num_lcs_parameters = num_nodes_in_subcomponent * get_num_parameters(lcs_parameterization);
 		else
 			throw _MSG_EXCEPT("LCS assignment not recognized.");
 
-		return sizeof(LocalIndex) // constituent id
-			+ sizeof(num_nodes_in_subconstituent)
-			+ num_nodes_in_subconstituent * sizeof(LocalIndex)
-			+ sizeof(num_elements_in_subconstituent)
-			+ num_elements_in_subconstituent * sizeof(LocalIndex)
+		return sizeof(LocalIndex) // component id
+			+ sizeof(num_nodes_in_subcomponent)
+			+ num_nodes_in_subcomponent * sizeof(LocalIndex)
+			+ sizeof(num_elements_in_subcomponent)
+			+ num_elements_in_subcomponent * sizeof(LocalIndex)
 			+ num_lcs_parameters * sizeof(CoordType);
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	struct SubdomainInfo
+	struct PartitionInfo
 	{
-		LocalIndex subdomain_index;
+		LocalIndex partition_id;
 		LocalIndex num_nodes;
 		LocalIndex num_elements;
 		LocalIndex total_num_connectivity_entries;
 		Extent<CoordType> extent;
-		LocalIndex num_constituents;
-		std::vector<SubconstituentInfo<LocalIndex>> subconstituents;
+		LocalIndex num_components;
+		std::vector<SubcomponentInfo<LocalIndex>> subcomponents;
 
 		/// Returns the number of bytes needed within the binary mesh file
-		/// for this subdomain.  This method is used when the offsets are
+		/// for this partition.  This method is used when the offsets are
 		/// being calculated.
 		std::streamoff get_size_needed(const MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& meta_info) const {
 			// Compute the sizes individually to allow debuggers to check values, but a release compile will
 			// optimize most of the code away.
-			const std::streamoff size_for_subdomain_header = sizeof(subdomain_index) + sizeof(num_nodes) + sizeof(num_elements) + sizeof(extent);
-			// Size of nodes accounts for global id, parent subdomain, and coordintes of each node
+			const std::streamoff size_for_partition_header = sizeof(partition_id) + sizeof(num_nodes) + sizeof(num_elements) + sizeof(extent);
+			// Size of nodes accounts for global id, parent partition, and coordintes of each node
 			const std::streamoff size_for_nodes = num_nodes * (sizeof(GlobalIndex) + sizeof(LocalIndex) + meta_info.dimensionality * sizeof(CoordType));
-			// Size of element accounts for global id, type, parent subdomain, and connectivity of each element
+			// Size of element accounts for global id, type, parent partition, and connectivity of each element
 			const std::streamoff size_for_elements = num_elements * (sizeof(GlobalIndex) + sizeof(ElementType) + sizeof(LocalIndex))
 				+ total_num_connectivity_entries * sizeof(LocalIndex);
-			const std::streamoff size_for_constituent_header = sizeof(num_constituents) + sizeof(std::streamoff) * num_constituents;
+			const std::streamoff size_for_component_header = sizeof(num_components) + sizeof(std::streamoff) * num_components;
 			// Figures out how much space will be needed for the subconstitutents
-			std::streamoff size_for_subconstituents = 0;
-			for (auto& subconstituent : subconstituents) {
-				// Note: it was already tested that the constituent id exists in the meta_info
-				auto constituent_iter = std::find_if(meta_info.constituents.begin(), meta_info.constituents.end(),
-					[id = subconstituent.constituent_id](const ConstituentMetaInfo<LocalIndex>& x) -> bool {
+			std::streamoff size_for_subcomponents = 0;
+			for (auto& subcomponent : subcomponents) {
+				// Note: it was already tested that the component id exists in the meta_info
+				auto component_iter = std::find_if(meta_info.components.begin(), meta_info.components.end(),
+					[id = subcomponent.component_id](const ComponentMetaInfo<LocalIndex>& x) -> bool {
 					return x.id == id;
 				});
-				if (constituent_iter == meta_info.constituents.end())
-					throw _MSG_EXCEPT_C("In subdomain " + std::to_string(subdomain_index) + ", constituent ID " + std::to_string(subconstituent.constituent_id) + " was given, but it was not included as a constituent when constructed.");
+				if (component_iter == meta_info.components.end())
+					throw _MSG_EXCEPT_C("In partition " + std::to_string(partition_id) + ", component ID " + std::to_string(subcomponent.component_id) + " was given, but it was not included as a component when constructed.");
 
-				size_for_subconstituents += get_size_for_subconstituent<LocalIndex, CoordType>(subconstituent.num_nodes_in_subconstituent,
-					subconstituent.num_elements_in_subconstituent, constituent_iter->lcs_assignment, constituent_iter->lcs_parameterization);
+				size_for_subcomponents += get_size_for_subcomponent<LocalIndex, CoordType>(subcomponent.num_nodes_in_subcomponent,
+					subcomponent.num_elements_in_subcomponent, component_iter->lcs_assignment, component_iter->lcs_parameterization);
 			}
 
 			// Figure out the total size on disk needed to store
-			// everything needed for the subdomain.
-			return size_for_subdomain_header
+			// everything needed for the partition.
+			return size_for_partition_header
 				+ size_for_nodes + size_for_elements
-				+ size_for_constituent_header
-				+ size_for_subconstituents;
+				+ size_for_component_header
+				+ size_for_subcomponents;
 		};
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void to_json(json& j, const SubdomainInfo<GlobalIndex, LocalIndex, CoordType>& ss)
+	void to_json(json& j, const PartitionInfo<GlobalIndex, LocalIndex, CoordType>& ss)
 	{
-		j = json{ {"subdomain_index", ss.subdomain_index},
+		j = json{ {"partition_id", ss.partition_id},
 			{"num_nodes", ss.num_nodes},
 			{"num_elements", ss.num_elements},
 			{"total_num_connectivity_entries", ss.total_num_connectivity_entries},
 			{"extent", ss.extent},
-			{"num_constituents", ss.num_constituents},
-			{"subconstituents", ss.subconstituents}
+			{"num_components", ss.num_components},
+			{"subcomponents", ss.subcomponents}
 		};
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void from_json(const json& j, SubdomainInfo<GlobalIndex, LocalIndex, CoordType>& ss)
+	void from_json(const json& j, PartitionInfo<GlobalIndex, LocalIndex, CoordType>& ss)
 	{
-		j.at("subdomain_index").get_to(ss.subdomain_index);
+		j.at("partition_id").get_to(ss.partition_id);
 		j.at("num_nodes").get_to(ss.num_nodes);
 		j.at("num_elements").get_to(ss.num_elements);
 		j.at("total_num_connectivity_entries").get_to(ss.total_num_connectivity_entries);
 		j.at("extent").get_to(ss.extent);
-		j.at("num_constituents").get_to(ss.num_constituents);
-		j.at("subconstituents").get_to(ss.subconstituents);
+		j.at("num_components").get_to(ss.num_components);
+		j.at("subcomponents").get_to(ss.subcomponents);
 	}
 
+	/// Holds the data describing a subcomponent
+	template<typename LocalIndex, typename CoordType>
+	struct Subcomponent
+	{
+		LocalIndex component_id;
+		std::vector<LocalIndex> nodes_in_subcomponent;
+		std::vector<LocalIndex> elements_in_subcomponent;
+		std::vector<CoordType> lcs_parameters_in_subcomponent;
+	};
+
+	/// Holds the mesh for a partition
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	struct Partition
+	{
+		LocalIndex partition_id;
+		std::vector<GlobalIndex> node_global_ids;
+		std::vector<LocalIndex> node_parent_partitions;
+		std::vector<CoordType> node_coords;
+		std::vector<GlobalIndex> element_global_ids;
+		std::vector<LocalIndex> element_parent_partitions;
+		std::vector<ElementType> element_types;
+		std::vector<std::vector<LocalIndex>> element_connectivities;
+		std::vector<Subcomponent<LocalIndex, CoordType>> subcomponents;
+
+		/// A helper to resize the node and element vectors
+		void resize(const LocalIndex num_nodes, const LocalIndex num_elements) {
+			node_global_ids.resize(num_nodes);
+			node_parent_partitions.resize(num_nodes);
+			node_coords.resize(num_nodes);
+			element_global_ids.resize(num_elements);
+			element_parent_partitions.resize(num_elements);
+			element_types.resize(num_elements);
+			element_connectivities.resize(num_elements);
+		}
+	};
 }

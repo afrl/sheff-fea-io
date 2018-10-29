@@ -63,27 +63,27 @@ bool test_gather_vectors_int()
 		return true;
 }
 
-void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, double>& meta_info, std::vector<SubdomainInfo<int16_t, int16_t, double>>& subdomains)
+void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, double>& meta_info, std::vector<PartitionInfo<int16_t, int16_t, double>>& partitions)
 {
 	meta_info = {
 		9,
 		4,
 		2,
 		{ {0, 0, 0}, {1, 1, 0} },
-		{ { 0, "Constituent0", LCSAssignment::Constituent, LCSParameterization::Quaternion },
-		  { 1, "Constituent1", LCSAssignment::Element, LCSParameterization::Quaternion } },
+		{ { 0, "Component0", LCSAssignment::Component, LCSParameterization::Quaternion },
+		  { 1, "Component1", LCSAssignment::Element, LCSParameterization::Quaternion } },
 		2,
 		{}
 	};
 
 	DataTypeSizes<int16_t, int16_t, double> data_types;
 
-	SubconstituentInfo<int16_t> sc0 = { 0, 4, 1 };
-	SubconstituentInfo<int16_t> sc1 = { 0, 4, 1 };
-	SubconstituentInfo<int16_t> sc2 = { 1, 4, 1 };
-	SubconstituentInfo<int16_t> sc3 = { 1, 4, 1 };
+	SubcomponentInfo<int16_t> sc0 = { 0, 4, 1 };
+	SubcomponentInfo<int16_t> sc1 = { 0, 4, 1 };
+	SubcomponentInfo<int16_t> sc2 = { 1, 4, 1 };
+	SubcomponentInfo<int16_t> sc3 = { 1, 4, 1 };
 
-	SubdomainInfo<int16_t, int16_t, double> subdomain0 = {
+	PartitionInfo<int16_t, int16_t, double> part0 = {
 		0,
 		6,
 		2,
@@ -93,7 +93,7 @@ void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, double>& meta_info, 
 		{ sc0, sc2 }
 	};
 
-	SubdomainInfo<int16_t, int16_t, double> subdomain1 = {
+	PartitionInfo<int16_t, int16_t, double> part1 = {
 		1,
 		6,
 		2,
@@ -103,12 +103,12 @@ void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, double>& meta_info, 
 		{ sc1, sc3 }
 	};
 
-	subdomains = { subdomain0, subdomain1 };
+	partitions = { part0, part1 };
 }
 
-void write_subdomain0(MeshWriter<int16_t, int16_t, double>& writer)
+void write_part0(MeshWriter<int16_t, int16_t, double>& writer)
 {
-	writer.write_subdomain(
+	Partition<int16_t, int16_t, double> partition = {
 		0,
 		{ 0, 1, 3, 4, 6, 7 },
 		{ 0, 0, 0, 0, 0, 0 },
@@ -117,15 +117,17 @@ void write_subdomain0(MeshWriter<int16_t, int16_t, double>& writer)
 		{ 0, 0 },
 		{ ElementType::Q2D4N, ElementType::Q2D4N },
 		{ {0, 2, 3, 1}, {2, 4, 5, 3} },
-		{0, 1},
-		{ {0, 1, 2, 3}, {2, 3, 4, 5} },
-		{ {0}, {1} },
-		{ {1, 0, 0, 0}, {1, 0, 0, 0} });
+		{ 
+			{ 0, {0, 1, 2, 3}, {0}, {1, 0, 0, 0} },
+			{ 1, {2, 3, 4, 5}, {1}, {1, 0, 0, 0} },
+		}
+	};
+	writer.write_partition(partition);
 }
 
-void write_subdomain1(MeshWriter<int16_t, int16_t, double>& writer)
+void write_part1(MeshWriter<int16_t, int16_t, double>& writer)
 {
-	writer.write_subdomain(
+	Partition<int16_t, int16_t, double> partition = {
 		1,
 		{ 1, 2, 4, 5, 7, 8 },
 		{ 0, 1, 0, 1, 0, 1 },
@@ -134,26 +136,26 @@ void write_subdomain1(MeshWriter<int16_t, int16_t, double>& writer)
 		{ 1, 1 },
 		{ ElementType::Q2D4N, ElementType::Q2D4N },
 		{ { 0, 2, 3, 1 }, { 2, 4, 5, 3 } },
-		{ 0, 1 },
-		{ { 0, 1, 2, 3 }, { 2, 3, 4, 5 } },
-		{ { 0 }, { 1 } },
-		{ { 1, 0, 0, 0 }, { 1, 0, 0, 0 } });
+		{
+			{ 0, {0, 1, 2, 3}, {0}, {1, 0, 0, 0} },
+			{ 1, {2, 3, 4, 5}, {1}, {1, 0, 0, 0} },
+		}
+	};
+	writer.write_partition(partition);
 }
 
 bool test_mesh_writer_serial()
 {
 	MeshMetaInfo<int16_t, int16_t, double> meta_info;
-	std::vector<SubdomainInfo<int16_t, int16_t, double>> all_subdomains;
-	get_test_subdomain_info(meta_info, all_subdomains);
+	std::vector<PartitionInfo<int16_t, int16_t, double>> all_partitions;
+	get_test_subdomain_info(meta_info, all_partitions);
 
 	MeshWriter<int16_t, int16_t, double> writer("test_serial",
 		meta_info,
 		WriteMode::Serial);
 
-	write_subdomain0(writer);
-	write_subdomain1(writer);
-
-	writer.finalize();
+	write_part0(writer);
+	write_part1(writer);
 
 	return true;
 }
@@ -161,36 +163,34 @@ bool test_mesh_writer_serial()
 bool test_mesh_writer_parallel()
 {
 	MeshMetaInfo<int16_t, int16_t, double> meta_info;
-	std::vector<SubdomainInfo<int16_t, int16_t, double>> all_subdomains;
-	get_test_subdomain_info(meta_info, all_subdomains);
+	std::vector<PartitionInfo<int16_t, int16_t, double>> all_partitions;
+	get_test_subdomain_info(meta_info, all_partitions);
 
-	std::vector<SubdomainInfo<int16_t, int16_t, double>> subdomain_info_on_this_proc;
+	std::vector<PartitionInfo<int16_t, int16_t, double>> part_info_on_this_proc;
 	if (MPIUtils::get_num_local_ranks() > 1) {
 		if (MPIUtils::get_local_rank() == 0)
-			subdomain_info_on_this_proc = { all_subdomains[0] };
+			part_info_on_this_proc = { all_partitions[0] };
 		else if (MPIUtils::get_local_rank() == 1)
-			subdomain_info_on_this_proc = { all_subdomains[1] };
+			part_info_on_this_proc = { all_partitions[1] };
 	}
 	else
-		subdomain_info_on_this_proc = all_subdomains;
+		part_info_on_this_proc = all_partitions;
 
 	MeshWriter<int16_t, int16_t, double> writer("test_parallel", meta_info, WriteMode::Parallel);
-	for (auto& si : subdomain_info_on_this_proc)
-		writer.queue_subdomain_for_write(si);
+	for (auto& pi : part_info_on_this_proc)
+		writer.queue_partition_for_write(pi);
 	writer.start_parallel_write_phase();
 
 	if (MPIUtils::get_num_local_ranks() > 1) {
 		if (MPIUtils::get_local_rank() == 0)
-			write_subdomain0(writer);
+			write_part0(writer);
 		else if (MPIUtils::get_local_rank() == 1)
-			write_subdomain1(writer);
+			write_part1(writer);
 	}
 	else {
-		write_subdomain0(writer);
-		write_subdomain1(writer);
+		write_part0(writer);
+		write_part1(writer);
 	}
-
-	writer.finalize();
 
 	return true;
 }
@@ -216,17 +216,16 @@ void illustrative_serial()
 		4, // total # elements
 		2, // dimensionality
 		{ { 0, 0, 0}, {1, 1, 0} }, // extent
-		{ 0, 1 }, // constituent IDs
-		{ "Constituent0", "Constituent1" }, // constituent names
-		{ LCSAssignment::Constituent, LCSAssignment::Element }, // level at which local
+		{ 0, 1 }, // component IDs
+		{ "Component0", "Component1" }, // component names
+		{ LCSAssignment::Component, LCSAssignment::Element }, // level at which local
 		// coordinate systems are assigned
 		{ LCSParameterization::Quaternion, LCSParameterization::Quaternion }, // type
 		// of parameterization used for the local coordinate sytem
 		2, // # subdomains
 		WriteMode::Serial); // The flag for serial vs parallel
-	//writer.write_subdomain(/* A bunch of parameters describing the mesh
+	//writer.write_partition(/* A bunch of parameters describing the mesh
 	//					   and local coordinate systems.*/);
-	writer.finalize();
 }
 
 
@@ -251,9 +250,9 @@ void illustrative_parallel()
 		4, // total # elements
 		2, // dimensionality
 		{ { 0, 0, 0}, {1, 1, 0} }, // extent
-		{ 0, 1 }, // constituent IDs
-		{ "Constituent0", "Constituent1" }, // constituent names
-		{ LCSAssignment::Constituent, LCSAssignment::Element }, // level at which local
+		{ 0, 1 }, // component IDs
+		{ "Component0", "Component1" }, // component names
+		{ LCSAssignment::Component, LCSAssignment::Element }, // level at which local
 		// coordinate systems are assigned
 		{ LCSParameterization::Quaternion, LCSParameterization::Quaternion }, // type
 		// of parameterization used for the local coordinate sytem
@@ -266,7 +265,7 @@ void illustrative_parallel()
 	// they are responsible for writing.  This means 4 processors could
 	// write however many subdomains they want, or you can have each processor
 	// write one subdomain each.
-	//writer.queue_subdomain_for_write(/* Several parameters describing
+	//writer.queue_partition_for_write(/* Several parameters describing
 	//								 high-level info about the subdomain */);
 	
 	// You call this to trigger the MPI communciation and preallocation of
@@ -275,11 +274,8 @@ void illustrative_parallel()
 	writer.start_parallel_write_phase();
 
 	// Each processor calls this for each subdomain they should write
-	//writer.write_subdomain(/* A bunch of parameters describing the mesh
+	//writer.write_partition(/* A bunch of parameters describing the mesh
 	//					   and local coordinate systems.*/);
-
-	// Closes the binary file and writes the accompaning JSON file
-	writer.finalize();
 }
 
 int main(int argc, char **argv)

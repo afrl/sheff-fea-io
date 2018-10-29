@@ -12,7 +12,7 @@
 #include "MPIUtils.h"
 #endif
 
-#include "MeshInfoStructs.h"
+#include "MeshStructs.h"
 #include "IOUtils.h"
 #include "Exceptions.h"
 
@@ -30,15 +30,25 @@ namespace fea_io
 		Finalized
 	};
 
-	/// The workflow should be:
-	/// - provide header to constructor
-	///   - it will deduce the data type sizes
-	/// - write each subdomain
-	/// or
-	/// - provide sizes of each subdomain and write in parallel
-	// Generate two files:
-	// - json <title>.jmesh
-	// - binary data <title>.bmesh
+	/// A class for writing a two-part mesh file(s) composed of a JSON and binary file.
+	/// The class supports serial and parallel I/O through the same interface.
+	/// For example, to write in serial:
+	/// \code{cpp}
+	/// MeshWriter<int64_t, int32_t, double> writer(..., WriteMode::Serial);
+	///	writer.write_partition(...);
+	/// \endcode
+	/// 
+	/// To write in parallel:
+	/// \code{cpp}
+	/// MeshWriter<int64_t, int32_t, double> writer(..., WriteMode::Parallel);
+	/// // Queue each partition before any processor writes anything so the size and offsets
+	/// // of the data for each rank can be computed
+	/// writer.queue_partition_for_write(...);
+	/// // When all the partitions have been queued, indicate it is time to write
+	/// writer.start_parallel_write_phase();
+	/// // Then each processor writes the partitions that it queued
+	///	writer.write_partition(...);
+	/// \endcode
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	class MeshWriter
 	{
@@ -49,7 +59,7 @@ namespace fea_io
 		/// - file_path: leave off the extension but provide path and file name
 		/// - dimensionality: indicates if 1D, 2D, or 3D (1, 2, or 3 respectively)
 		/// - extent: 3D bounding box of entire mesh (helps with post-processing scripts)
-		/// - constituent_ids must match size of constituent_names.  Each entry in each vector
+		/// - component_ids must match size of component_names.  Each entry in each vector
 		///   indicates the ID and name of a constitutent respectively, i.e. ordering matters.
 		MeshWriter(
 			const std::string file_path,
@@ -57,11 +67,11 @@ namespace fea_io
 			const GlobalIndex total_num_elements,
 			const LocalIndex dimensionality,
 			const Extent<CoordType> extent,
-			const std::vector<LocalIndex> constituent_ids,
-			const std::vector<std::string> constituent_names,
-			const std::vector<LCSAssignment> constituent_lcs_assignments,
-			const std::vector<LCSParameterization> constituent_lcs_parameterizations,
-			const LocalIndex total_num_subdomains = 0,
+			const std::vector<LocalIndex> component_ids,
+			const std::vector<std::string> component_names,
+			const std::vector<LCSAssignment> component_lcs_assignments,
+			const std::vector<LCSParameterization> component_lcs_parameterizations,
+			const LocalIndex total_num_partitions = 0,
 			const WriteMode write_mode = WriteMode::Serial);
 
 		MeshWriter(
@@ -69,49 +79,72 @@ namespace fea_io
 			const MetaInfo meta_info,
 			const WriteMode write_mode = WriteMode::Serial);
 
-		/// If in parallel mode, then this needs to be called for each subdomain
+		/// Destructor calls finalize() if it has not been called.
+		~MeshWriter();
+
+		/// If in parallel mode, then this needs to be called for each partition
 		/// before writing begins.  An error will be thrown otherwise.
-		void queue_subdomain_for_write(const SubdomainInfo<GlobalIndex, LocalIndex, CoordType>& subdomain_info);
+		void queue_partition_for_write(const PartitionInfo<GlobalIndex, LocalIndex, CoordType>& part_info);
 
 		/// If the constructor was called with parallel mode specified, then
-		/// this must be called after all the queue_subdomain_for_write calls
-		/// have been made, but before write_subdomain is ever called.
+		/// this must be called after all the queue_partition_for_write calls
+		/// have been made, but before write_partition is ever called.
 		void start_parallel_write_phase();
 
-		// Write one subdomain
-		void write_subdomain(
-			const LocalIndex subdomain_index,
-			const std::vector<GlobalIndex> node_global_inds,
-			const std::vector<LocalIndex> node_parent_subdomains,
+		/// Write a partition to the mesh.  if in parallel mode, this must be called
+		/// after start_parallel_write_phase has been called.
+		/// A few notes about the Partition struct:
+		/// - For serial mode, partition_id must be given as an integer that is
+		///   monotonically increasing (0, 1, 2, 3, etc.).
+		/// - For parallel mode, queue_partition_for_write must have already been called
+		///   for a partition with the partition_id.
+		/// - node_global_inds, node_parent_partitions, and node_coords must be the same size
+		///   (for parallel mode, they must also match the number of nodes given earlier for
+		///   the partition).
+		/// - element_global_inds, element_parent_partitions, element_types, and element_connectivities
+		///   must be the same size (for parallel mode, they must also match the number of nodes 
+		///   given earlier for the partition).
+		/// - For parallel mode, subcomponents.component_ids_of_subcomponents must match the component
+		///   IDs given for the partition (in the vector of subcomponent structs)
+		void write_partition(const Partition<GlobalIndex, LocalIndex, CoordType>& partition);
+
+		/// TODO: implement this method once this class has been debugged
+		/// Takes an iterator adapter (see MeshIteratorAdapters.h for reference) for the begin and end of
+		/// nodes and elements and writes the mesh data without intermediate data.
+		template<typename NodeIteratorAdapter, typename ElementIteratorAdapter>
+		void write_partition(
+			const NodeIteratorAdapter node_begin, const NodeIteratorAdapter node_end,
+			const ElementIteratorAdapter element_begin, const ElementIteratorAdapter element_end);
+
+		/// A wrapper for writing the first partition in the mesh for serial mode
+		/// Note: one could just use write_partition, which offers more flexibility
+		/// with iterators
+		void write(
+			const std::vector<GlobalIndex> node_global_ids,
 			const std::vector<CoordType> node_coords,
-			const std::vector<GlobalIndex> element_global_inds,
-			const std::vector<LocalIndex> element_parent_subdomains,
+			const std::vector<GlobalIndex> element_global_ids,
 			const std::vector<ElementType> element_types,
 			const std::vector<std::vector<LocalIndex>> element_connectivities,
-			const std::vector<LocalIndex> constituent_ids_of_subconstituents,
-			const std::vector<std::vector<LocalIndex>> nodes_in_subconstituents,
-			const std::vector<std::vector<LocalIndex>> elements_in_subconstituents,
-			const std::vector<std::vector<CoordType>> lcs_parameters_in_subconstituents);
+			const std::vector<Subcomponent<LocalIndex, CoordType>> subcomponents);
 
-		// Close the binary file, writes the JSON file, and resets the MeshWriter object. 
-		// Note: this gets call with the destructor, so you don't have to call it unless
-		// you want to force it to release memory early and finish up the files.
-		void finalize();
+		/// Close the binary file, writes the JSON file, and resets the MeshWriter object. 
+		/// Note: this gets call with the destructor, so you don't have to call it unless
+		/// you want to force it to up the files.
+		void close();
 
 	private:
 		MeshWriter() = delete;
 		
 		MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> meta_info_;
-		std::vector<SubdomainInfo<GlobalIndex, LocalIndex, CoordType>> subdomain_infos_;
+		std::vector<PartitionInfo<GlobalIndex, LocalIndex, CoordType>> partition_infos_;
 		WriteMode write_mode_;
 		WriteState write_state_;
 		std::string file_path_;
 		std::ofstream out_stream_;
 		const std::string binary_ext = ".bin";
 		
-		/// Gets subdomain_infos_ from all the ranks and calculates the
-		/// offsets that each subdomain will have.  meta_info_ will be updated
-		/// accordingly on every rank.
+		/// Gets partition_infos_ from all the ranks and calculates the offsets that each partition
+		/// will have.  meta_info_ will be updated accordingly on every rank.
 		/// Returns the total number of bytes needed for the mesh file.
 		std::streamoff calculate_offsets();
 
@@ -119,27 +152,29 @@ namespace fea_io
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline fea_io::MeshWriter<GlobalIndex, LocalIndex, CoordType>::MeshWriter(const std::string file_path, const GlobalIndex total_num_nodes, const GlobalIndex total_num_elements, const LocalIndex dimensionality, const Extent<CoordType> extent, const std::vector<LocalIndex> constituent_ids, const std::vector<std::string> constituent_names, const std::vector<LCSAssignment> constituent_lcs_assignments, const std::vector<LCSParameterization> constituent_lcs_parameterizations, const LocalIndex total_num_subdomains, const WriteMode write_mode)
+	inline fea_io::MeshWriter<GlobalIndex, LocalIndex, CoordType>::MeshWriter(const std::string file_path, const GlobalIndex total_num_nodes, const GlobalIndex total_num_elements, const LocalIndex dimensionality, const Extent<CoordType> extent, const std::vector<LocalIndex> component_ids, const std::vector<std::string> component_names, const std::vector<LCSAssignment> component_lcs_assignments, const std::vector<LCSParameterization> component_lcs_parameterizations, const LocalIndex total_num_partitions, const WriteMode write_mode)
 	{
-		if ((constituent_ids.size() != constituent_names.size()) || (constituent_ids.size() != constituent_lcs_assignments.size())
-			|| (constituent_ids.size() != constituent_lcs_parameterizations.size()))
-			throw _MSG_EXCEPT_C("The vectors passed for constituent_ids and constituent_names do not match.");
+		if ((component_ids.size() != component_names.size()) || (component_ids.size() != component_lcs_assignments.size())
+			|| (component_ids.size() != component_lcs_parameterizations.size()))
+			throw _MSG_EXCEPT_C("The vectors passed for component_ids and component_names do not match.");
 
 		meta_info_.total_num_nodes = total_num_nodes;
 		meta_info_.total_num_elements = total_num_elements;
 		meta_info_.dimensionality = dimensionality;
 		meta_info_.extent = extent;
-		for (auto i = 0; i < static_cast<int>(constituent_ids.size()); i++) {
-			meta_info_.constituents.push_back({ constituent_ids[i], constituent_names[i],
-				constituent_lcs_assignments[i], constituent_lcs_parameterizations[i] });
+		for (auto i = 0; i < static_cast<int>(component_ids.size()); i++) {
+			meta_info_.components.push_back({ component_ids[i], component_names[i],
+				component_lcs_assignments[i], component_lcs_parameterizations[i] });
 		}
-		meta_info_.total_num_subdomains = total_num_subdomains;
+		meta_info_.total_num_partitions = total_num_partitions;
 
 		write_mode_ = write_mode;
 		file_path_ = file_path;
 
-		if (write_mode == WriteMode::Serial)
+		if (write_mode == WriteMode::Serial) {
 			write_state_ = WriteState::WritePhase;
+			out_stream_.open(file_path_ + binary_ext, std::ios::binary | std::fstream::out);
+		}
 		else if (write_mode == WriteMode::Parallel)
 			write_state_ = WriteState::QueuePhase;
 	}
@@ -151,19 +186,28 @@ namespace fea_io
 		meta_info_ = meta_info;
 		file_path_ = file_path;
 
-		if (write_mode == WriteMode::Serial)
+		if (write_mode == WriteMode::Serial) {
 			write_state_ = WriteState::WritePhase;
+			out_stream_.open(file_path_ + binary_ext, std::ios::binary | std::fstream::out);
+		}
 		else if (write_mode == WriteMode::Parallel)
 			write_state_ = WriteState::QueuePhase;
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::queue_subdomain_for_write(const SubdomainInfo<GlobalIndex, LocalIndex, CoordType>& subdomain_info)
+	inline MeshWriter<GlobalIndex, LocalIndex, CoordType>::~MeshWriter()
+	{
+		if (write_state_ != WriteState::Finalized)
+			close();
+	}
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::queue_partition_for_write(const PartitionInfo<GlobalIndex, LocalIndex, CoordType>& partition_info)
 	{
 		if (write_state_ != WriteState::QueuePhase)
-			throw _MSG_EXCEPT_C("Attempted to queue a subdomain while not in queue phase.  If in serial, then you can write immediately.");
+			throw _MSG_EXCEPT_C("Attempted to queue a partition while not in queue phase.  If in serial, then you can write immediately.");
 
-		subdomain_infos_.push_back(subdomain_info);
+		partition_infos_.push_back(partition_info);
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
@@ -209,149 +253,153 @@ namespace fea_io
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void fea_io::MeshWriter<GlobalIndex, LocalIndex, CoordType>::write_subdomain(const LocalIndex subdomain_index, const std::vector<GlobalIndex> node_global_inds, const std::vector<LocalIndex> node_parent_subdomains, const std::vector<CoordType> node_coords, const std::vector<GlobalIndex> element_global_inds, const std::vector<LocalIndex> element_parent_subdomains, const std::vector<ElementType> element_types, const std::vector<std::vector<LocalIndex>> element_connectivities, const std::vector<LocalIndex> constituent_ids_of_subconstituents, const std::vector<std::vector<LocalIndex>> nodes_in_subconstituents, const std::vector<std::vector<LocalIndex>> elements_in_subconstituents, const std::vector<std::vector<CoordType>> lcs_parameters_in_subconstituents)
+	inline void fea_io::MeshWriter<GlobalIndex, LocalIndex, CoordType>::write_partition(const Partition<GlobalIndex, LocalIndex, CoordType> & partition)
 	{
 		if (write_state_ != WriteState::WritePhase)
-			throw _MSG_EXCEPT_C("Attempted to write a subdomain while not in write phase.  If in parallel, be sure to call start_parallel_write_phase() after queuing the information.");
+			throw _MSG_EXCEPT_C("Attempted to write a partition while not in write phase.  If in parallel, be sure to call start_parallel_write_phase() after queuing the information.");
 
 		if (write_mode_ == WriteMode::Parallel) {
-			// Make sure the given subdomain was already queued on this processor
-			auto match_iter = std::find_if(subdomain_infos_.begin(), subdomain_infos_.end(),
-				[&subdomain_index](const SubdomainInfo<GlobalIndex, LocalIndex, CoordType>& x) -> bool {
-				return x.subdomain_index == subdomain_index;
+			// Make sure the given partition was already queued on this processor
+			auto match_iter = std::find_if(partition_infos_.begin(), partition_infos_.end(),
+				[id = partition.partition_id](const PartitionInfo<GlobalIndex, LocalIndex, CoordType>& x) -> bool {
+				return x.partition_id == id;
 			});
-			if (match_iter == subdomain_infos_.end())
-				throw _MSG_EXCEPT_C("Data was provided for subdomain " + std::to_string(subdomain_index) + " but this processor does not contain the info for it.");
-			auto& subdomain_info = *match_iter;
+			if (match_iter == partition_infos_.end())
+				throw _MSG_EXCEPT_C("Data was provided for partition " + std::to_string(partition.partition_id) + " but this processor does not contain the info for it.");
+			auto& partition_info = *match_iter;
 
-			// Check that provided vectors match the expected size form the queued subdomain info
-			if (subdomain_info.num_nodes != node_global_inds.size())
-				throw _MSG_EXCEPT_C("The node global ids given for subdomain " + std::to_string(subdomain_index) + " do not match the size expected.");
-			if (subdomain_info.num_elements != element_global_inds.size())
-				throw _MSG_EXCEPT_C("The element global ids given for subdomain " + std::to_string(subdomain_index) + " do not match the size expected.");
+			// Check that provided vectors match the expected size form the queued partition info
+			if (partition_info.num_nodes != partition.node_global_ids.size())
+				throw _MSG_EXCEPT_C("The node global ids given for partition " + std::to_string(partition.partition_id) + " do not match the size expected.");
+			if (partition_info.num_elements != partition.element_global_ids.size())
+				throw _MSG_EXCEPT_C("The element global ids given for partition " + std::to_string(partition.partition_id) + " do not match the size expected.");
 
-			// Check that the constituents exist in the subdomain according to the SubdomainInfo provided earlier
-			for (auto constituent_id : constituent_ids_of_subconstituents) {
-				auto c_match_iter = std::find_if(subdomain_info.subconstituents.begin(), subdomain_info.subconstituents.end(),
-					[&constituent_id](const SubconstituentInfo<LocalIndex>& x) -> bool {
-					return x.constituent_id == constituent_id;
+			// Check that the components exist in the partition according to the PartitionInfo provided earlier
+			for (auto& subcomponent : partition.subcomponents) {
+				auto c_match_iter = std::find_if(partition_info.subcomponents.begin(), partition_info.subcomponents.end(),
+					[id = subcomponent.component_id](const SubcomponentInfo<LocalIndex>& x) -> bool {
+					return x.component_id == id;
 				});
-				if (c_match_iter == subdomain_info.subconstituents.end())
-					throw _MSG_EXCEPT_C("In subdomain " + std::to_string(subdomain_index) + ", constituent ID " + std::to_string(constituent_id) + " was given, but it was not given when the subdomain was queued earlier.");
+				if (c_match_iter == partition_info.subcomponents.end())
+					throw _MSG_EXCEPT_C("In partition " + std::to_string(partition.partition_id) + ", component ID " + std::to_string(subcomponent.component_id) + " was given, but it was not given when the partition was queued earlier.");
 			}
 		}
 		else {
-			if (meta_info_.subdomain_offsets.size() != subdomain_index)
-				throw _MSG_EXCEPT_C("During a serial write, the subdomains were attempted to be written non-sequentially. Subdomain " + std::to_string(meta_info_.subdomain_offsets.size()) + " expected, but " + std::to_string(subdomain_index) + " given.");
+			if (meta_info_.partition_offsets.size() != partition.partition_id)
+				throw _MSG_EXCEPT_C("During a serial write, the partitions were attempted to be written non-sequentially. Partition " + std::to_string(meta_info_.partition_offsets.size()) + " expected, but " + std::to_string(partition.partition_id) + " given.");
 		}
 
 		// Check to make sure the node vectors are the right size
-		if (node_global_inds.size() != node_parent_subdomains.size())
-			throw _MSG_EXCEPT_C("The node parent subdomains given for subdomain " + std::to_string(subdomain_index) + " do not match the size expected.");
-		if (node_global_inds.size() * meta_info_.dimensionality != node_coords.size())
-			throw _MSG_EXCEPT_C("The node coordinates given for subdomain " + std::to_string(subdomain_index) + " do not match the size expected.");
+		if (partition.node_global_ids.size() != partition.node_parent_partitions.size())
+			throw _MSG_EXCEPT_C("The node parent partitions given for partition " + std::to_string(partition.partition_id) + " do not match the size expected.");
+		if (partition.node_global_ids.size() * meta_info_.dimensionality != partition.node_coords.size())
+			throw _MSG_EXCEPT_C("The node coordinates given for partition " + std::to_string(partition.partition_id) + " do not match the size expected.");
 		// Check to make sure the element vectors are the right size
-		if (element_global_inds.size() != element_types.size())
-			throw _MSG_EXCEPT_C("The element types given for subdomain " + std::to_string(subdomain_index) + " do not match the size expected.");
-		if (element_global_inds.size() != element_parent_subdomains.size())
-			throw _MSG_EXCEPT_C("The element parent subdomains given for subdomain " + std::to_string(subdomain_index) + " do not match the size expected.");
-		if (element_global_inds.size() != element_connectivities.size())
-			throw _MSG_EXCEPT_C("The element connectivitites given for subdomain " + std::to_string(subdomain_index) + " do not match the size expected.");
+		if (partition.element_global_ids.size() != partition.element_types.size())
+			throw _MSG_EXCEPT_C("The element types given for partition " + std::to_string(partition.partition_id) + " do not match the size expected.");
+		if (partition.element_global_ids.size() != partition.element_parent_partitions.size())
+			throw _MSG_EXCEPT_C("The element parent partitions given for partition " + std::to_string(partition.partition_id) + " do not match the size expected.");
+		if (partition.element_global_ids.size() != partition.element_connectivities.size())
+			throw _MSG_EXCEPT_C("The element connectivitites given for partition " + std::to_string(partition.partition_id) + " do not match the size expected.");
 
-		// Check that the constituent ID exists in the meta_info
-		for (auto constituent_id : constituent_ids_of_subconstituents) {
-			auto match_iter = std::find_if(meta_info_.constituents.begin(), meta_info_.constituents.end(),
-				[&constituent_id](const ConstituentMetaInfo<LocalIndex>& x) -> bool {
-				return x.id == constituent_id;
+		// Check that the component ID exists in the meta_info
+		for (auto& subcomponent : partition.subcomponents) {
+			auto match_iter = std::find_if(meta_info_.components.begin(), meta_info_.components.end(),
+				[id = subcomponent.component_id](const ComponentMetaInfo<LocalIndex>& x) -> bool {
+				return x.id == id;
 			});
-			if (match_iter == meta_info_.constituents.end())
-				throw _MSG_EXCEPT_C("In subdomain " + std::to_string(subdomain_index) + ", constituent ID " + std::to_string(constituent_id) + " was given, but it was not included as a constituent when constructed.");
+			if (match_iter == meta_info_.components.end())
+				throw _MSG_EXCEPT_C("In partition " + std::to_string(partition.partition_id) + ", component ID " + std::to_string(subcomponent.component_id) + " was given, but it was not included as a component when constructed.");
 		}
 
 		// Figure out the size on disk needed by each component
-		std::vector<std::streamoff> subconstituent_offsets;
+		std::vector<std::streamoff> subcomponent_offsets;
 		std::streamoff curr_offset = 0;
-		for (auto i = 0; i < nodes_in_subconstituents.size(); i++) {
-			subconstituent_offsets.push_back(curr_offset);
+		for (auto& subcomponent : partition.subcomponents) {
+			subcomponent_offsets.push_back(curr_offset);
 
-			// Note: it was already tested that the constituent id exists in the meta_info
-			auto constituent = *std::find_if(meta_info_.constituents.begin(), meta_info_.constituents.end(),
-				[id = constituent_ids_of_subconstituents[i]](const ConstituentMetaInfo<LocalIndex>& x) -> bool {
+			// Note: it was already tested that the component id exists in the meta_info
+			auto component = *std::find_if(meta_info_.components.begin(), meta_info_.components.end(),
+				[id = subcomponent.component_id](const ComponentMetaInfo<LocalIndex>& x) -> bool {
 				return x.id == id;
 			});
 
-			curr_offset += get_size_for_subconstituent<LocalIndex, CoordType>(static_cast<LocalIndex>(nodes_in_subconstituents.size()),
-				static_cast<LocalIndex>(elements_in_subconstituents.size()),
-				constituent.lcs_assignment, constituent.lcs_parameterization);
+			curr_offset += get_size_for_subcomponent<LocalIndex, CoordType>(
+				static_cast<LocalIndex>(subcomponent.nodes_in_subcomponent.size()),
+				static_cast<LocalIndex>(subcomponent.elements_in_subcomponent.size()),
+				component.lcs_assignment, component.lcs_parameterization);
 		}
 
-		// If in parallel mode, part of the file is already reserved for this subdomain
+		// If in parallel mode, part of the file is already reserved for this partition
 		if (write_mode_ == WriteMode::Parallel)
-			out_stream_.seekp(meta_info_.subdomain_offsets[subdomain_index]);
+			out_stream_.seekp(meta_info_.partition_offsets[partition.partition_id]);
 
 		std::streamoff start_pos = out_stream_.tellp();
 
-		// Write the high-level information about the subdomain
-		IOUtils::binary_write(out_stream_, subdomain_index);
-		IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(node_global_inds.size()));
-		IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(element_global_inds.size()));
-		auto extent = calculate_extent(node_coords, meta_info_.dimensionality);
+		// Write the high-level information about the partition
+		IOUtils::binary_write(out_stream_, partition.partition_id);
+		IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(partition.node_global_ids.size()));
+		IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(partition.element_global_ids.size()));
+		auto extent = calculate_extent(partition.node_coords, meta_info_.dimensionality);
 		IOUtils::binary_write(out_stream_, extent.min);
 		IOUtils::binary_write(out_stream_, extent.max);
 		// Write the node information
-		for (auto i = 0; i < static_cast<GlobalIndex>(node_global_inds.size()); i++) {
-			IOUtils::binary_write(out_stream_, node_global_inds[i]);
-			IOUtils::binary_write(out_stream_, node_parent_subdomains[i]);
-			IOUtils::binary_write(out_stream_, &node_coords[meta_info_.dimensionality*i], meta_info_.dimensionality);
+		for (auto i = 0; i < static_cast<GlobalIndex>(partition.node_global_ids.size()); i++) {
+			IOUtils::binary_write(out_stream_, partition.node_global_ids[i]);
+			IOUtils::binary_write(out_stream_, partition.node_parent_partitions[i]);
+			IOUtils::binary_write(out_stream_, &partition.node_coords[meta_info_.dimensionality*i], meta_info_.dimensionality);
 		}
 		// Write the element information
-		for (auto i = 0; i < static_cast<GlobalIndex>(element_global_inds.size()); i++) {
-			IOUtils::binary_write(out_stream_, element_global_inds[i]);
-			IOUtils::binary_write(out_stream_, static_cast<std::underlying_type<ElementType>::type>(element_types[i]));
-			IOUtils::binary_write(out_stream_, element_parent_subdomains[i]);
-			IOUtils::binary_write(out_stream_, element_connectivities[i]);
+		for (auto i = 0; i < static_cast<GlobalIndex>(partition.element_global_ids.size()); i++) {
+			IOUtils::binary_write(out_stream_, partition.element_global_ids[i]);
+			IOUtils::binary_write(out_stream_, static_cast<std::underlying_type<ElementType>::type>(partition.element_types[i]));
+			IOUtils::binary_write(out_stream_, partition.element_parent_partitions[i]);
+			IOUtils::binary_write(out_stream_, partition.element_connectivities[i]);
 		}
-		// Write the subconstituent information
-		IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(constituent_ids_of_subconstituents.size()));
-		IOUtils::binary_write(out_stream_, subconstituent_offsets);
-		for (auto sc_ind = 0; sc_ind < static_cast<LocalIndex>(constituent_ids_of_subconstituents.size()); sc_ind++) {
-			// Note: it was already tested that the constituent id exists in the meta_info
-			auto constituent = *std::find_if(meta_info_.constituents.begin(), meta_info_.constituents.end(),
-				[id = constituent_ids_of_subconstituents[sc_ind]](const ConstituentMetaInfo<LocalIndex>& x) -> bool {
+		// Write the subcomponent information
+		IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(partition.subcomponents.size()));
+		IOUtils::binary_write(out_stream_, subcomponent_offsets);
+		for (auto& subcomponent : partition.subcomponents) {
+			// Note: it was already tested that the component id exists in the meta_info
+			auto component = *std::find_if(meta_info_.components.begin(), meta_info_.components.end(),
+				[id = subcomponent.component_id](const ComponentMetaInfo<LocalIndex>& x) -> bool {
 				return x.id == id;
 			});
 
-			IOUtils::binary_write(out_stream_, constituent_ids_of_subconstituents[sc_ind]);
-			IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(nodes_in_subconstituents[sc_ind].size()));
-			IOUtils::binary_write(out_stream_, nodes_in_subconstituents[sc_ind]);
-			IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(elements_in_subconstituents[sc_ind].size()));
-			IOUtils::binary_write(out_stream_, elements_in_subconstituents[sc_ind]);
-			IOUtils::binary_write(out_stream_, lcs_parameters_in_subconstituents[sc_ind]);
+			IOUtils::binary_write(out_stream_, subcomponent.component_id);
+			IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(subcomponent.nodes_in_subcomponent.size()));
+			IOUtils::binary_write(out_stream_, subcomponent.nodes_in_subcomponent);
+			IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(subcomponent.elements_in_subcomponent.size()));
+			IOUtils::binary_write(out_stream_, subcomponent.elements_in_subcomponent);
+			IOUtils::binary_write(out_stream_, subcomponent.lcs_parameters_in_subcomponent);
 		}
 
 		std::streamoff end_pos = out_stream_.tellp();
 
 		if (write_mode_ == WriteMode::Parallel) {
-			auto expected_size = std::find_if(subdomain_infos_.begin(), subdomain_infos_.end(),
-				[&subdomain_index](const SubdomainInfo<GlobalIndex, LocalIndex, CoordType>& x) -> bool {
-				return x.subdomain_index == subdomain_index;
+			auto expected_size = std::find_if(partition_infos_.begin(), partition_infos_.end(),
+				[id = partition.partition_id](const PartitionInfo<GlobalIndex, LocalIndex, CoordType>& x) -> bool {
+				return x.partition_id == id;
 			})->get_size_needed(meta_info_);
 			if (end_pos - start_pos != expected_size)
-				throw _MSG_EXCEPT_C("The data written for subdomain " + std::to_string(subdomain_index) + " exceeded the space allocated for it."
+				throw _MSG_EXCEPT_C("The data written for partition " + std::to_string(partition.partition_id) + " exceeded the space allocated for it."
 					+ " Expected size of " + std::to_string(expected_size) + " but actually ended at " + std::to_string(end_pos - start_pos) + ".");
 		}
 		else {
-			meta_info_.subdomain_offsets.push_back(start_pos);
+			meta_info_.partition_offsets.push_back(start_pos);
 		}
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::finalize()
+	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::close()
 	{
 		out_stream_.close();
 
 		std::ofstream json_component(file_path_ + ".json");
-		json j = meta_info_;
+		json j;
+		j["meta_info"] = meta_info_;
+		DataTypeSizes<GlobalIndex, LocalIndex, CoordType> data_types;
+		j["types"] = data_types;
 		json_component << std::setw(4) << j << std::endl;
 		json_component.close();
 
@@ -363,28 +411,28 @@ namespace fea_io
 	{
 
 #ifdef HAVE_MPI
-		// The root rank will get the entire list of subdomain info, which will allow it
+		// The root rank will get the entire list of partition info, which will allow it
 		// to calculate the appropriate offsets.
-		auto all_subdomain_info = MPIUtils::gather_vectors(subdomain_infos_);
+		auto all_partition_info = MPIUtils::gather_vectors(partition_infos_);
 #else
 		// If this was not compiled using MPI, the the process must have all of the data already
-		auto all_subdomain_info = subdomain_infos_;
+		auto all_partition_info = partition_infos_;
 #endif
 
 		// Compute the size needed for each domain, and save the size required
-		// for each subdomain within an ordered vector (this means that the
-		// subdomains will ordered by index within the binary file)
-		std::vector<std::streamoff> subdomain_byte_sizes(all_subdomain_info.size(), 0);
-		for (auto& si : all_subdomain_info) {
-			subdomain_byte_sizes[si.subdomain_index] = si.get_size_needed(meta_info_);
+		// for each partition within an ordered vector (this means that the
+		// partitions will ordered by index within the binary file)
+		std::vector<std::streamoff> partition_byte_sizes(all_partition_info.size(), 0);
+		for (auto& pi : all_partition_info) {
+			partition_byte_sizes[pi.partition_id] = pi.get_size_needed(meta_info_);
 		}
 
-		// Compute the offsets of each subdomain (starting at 0)
-		meta_info_.subdomain_offsets.resize(subdomain_byte_sizes.size());
+		// Compute the offsets of each partition (starting at 0)
+		meta_info_.partition_offsets.resize(partition_byte_sizes.size());
 		std::streamoff prev_size = 0;
-		for (auto i = 0; i < subdomain_byte_sizes.size(); i++) {
-			meta_info_.subdomain_offsets[i] = prev_size;
-			prev_size += subdomain_byte_sizes[i];
+		for (auto i = 0; i < partition_byte_sizes.size(); i++) {
+			meta_info_.partition_offsets[i] = prev_size;
+			prev_size += partition_byte_sizes[i];
 		}
 
 		return prev_size;
