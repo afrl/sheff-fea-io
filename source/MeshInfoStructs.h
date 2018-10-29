@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "MeshEnums.h"
+#include "Exceptions.h"
 
 namespace fea_io
 {
@@ -120,19 +121,21 @@ namespace fea_io
 		LCSAssignment lcs_assignment;
 		LCSParameterization lcs_parameterization;
 
-		/// Returns the number of bytes needed within the binary mesh file
-		/// for this component.  This method is used when the offsets are
-		/// being calculated.
-		std::streamoff get_size_needed() const {
-			// First figure out how many bytes will be needed
-			std::streamoff size_for_lcs_data = 0;
+		/// Returns the number of LCS parameters that will be needed.
+		int get_total_num_lcs_parameters() const {
 			if (lcs_assignment == LCSAssignment::Constituent)
-				size_for_lcs_data = get_num_parameters(lcs_parameterization) * sizeof(CoordType);
+				return get_num_parameters(lcs_parameterization);
 			else if (lcs_assignment == LCSAssignment::Element)
-				size_for_lcs_data = num_elements_in_subconstituent * get_num_parameters(lcs_parameterization) * sizeof(CoordType);
-			if (lcs_assignment == LCSAssignment::Node)
-				size_for_lcs_data = num_nodes_in_subconstituent * get_num_parameters(lcs_parameterization) * sizeof(CoordType);
+				return num_elements_in_subconstituent * get_num_parameters(lcs_parameterization);
+			else if (lcs_assignment == LCSAssignment::Node)
+				return num_nodes_in_subconstituent * get_num_parameters(lcs_parameterization);
+			else
+				throw _MSG_EXCEPT_C("LCS assignment not recognized.");
+		}
 
+		/// Returns the number of bytes needed within the binary mesh file for this constituent
+		/// within a subdomain.  This method is used when the offsets are being calculated.
+		std::streamoff get_size_needed() const {
 			// Figure out the total size on disk needed to store
 			// everything needed for the component.
 			return sizeof(constituent_id)
@@ -142,7 +145,7 @@ namespace fea_io
 				+ num_elements_in_subconstituent * sizeof(LocalIndex)
 				+ sizeof(lcs_assignment)
 				+ sizeof(lcs_parameterization)
-				+ size_for_lcs_data;
+				+ this->get_total_num_lcs_parameters() * sizeof(CoordType);
 		};
 	};
 
@@ -173,6 +176,7 @@ namespace fea_io
 		LocalIndex subdomain_index;
 		LocalIndex num_nodes;
 		LocalIndex num_elements;
+		LocalIndex total_num_connectivity_entries;
 		std::array<CoordType, 6> extent;
 		LocalIndex num_constituents;
 		std::vector<SubconstituentInfo<GlobalIndex, LocalIndex, CoordType>> subconstituents;
@@ -180,18 +184,26 @@ namespace fea_io
 		/// Returns the number of bytes needed within the binary mesh file
 		/// for this subdomain.  This method is used when the offsets are
 		/// being calculated.
-		std::streamoff get_size_needed() const {
-			// First figure how much space the components will needed
+		std::streamoff get_size_needed(const LocalIndex dimensionality) const {
+			// Compute the sizes individually to allow debuggers to check values, but a release compile will
+			// optimize most of the code away.
+			const std::streamoff size_for_subdomain_header = sizeof(subdomain_index) + sizeof(num_nodes) + sizeof(num_elements) + sizeof(extent);
+			// Size of nodes accounts for global id, parent subdomain, and coordintes of each node
+			const std::streamoff size_for_nodes = num_nodes * (sizeof(GlobalIndex) + sizeof(LocalIndex) + dimensionality * sizeof(CoordType));
+			// Size of element accounts for global id, type, parent subdomain, and connectivity of each element
+			const std::streamoff size_for_elements = num_elements * (sizeof(GlobalIndex) + sizeof(ElementType) + sizeof(LocalIndex))
+				+ total_num_connectivity_entries * sizeof(LocalIndex);
+			const std::streamoff size_for_constituent_header = sizeof(num_constituents) + sizeof(std::streamoff) * num_constituents;
+			// Figures out how much space will be needed for the subconstitutents
 			std::streamoff size_for_subconstituents = 0;
 			for (auto& subconstituent : subconstituents)
 				size_for_subconstituents += subconstituent.get_size_needed();
 
 			// Figure out the total size on disk needed to store
 			// everything needed for the subdomain.
-			return sizeof(subdomain_index) + sizeof(num_nodes)
-				+ sizeof(num_elements) + sizeof(extent)
-				+ 0 // Insert size of nodes and elements here
-				+ sizeof(num_constituents)
+			return size_for_subdomain_header
+				+ size_for_nodes + size_for_elements
+				+ size_for_constituent_header
 				+ size_for_subconstituents;
 		};
 	};
@@ -202,6 +214,7 @@ namespace fea_io
 		j = json{ {"subdomain_index", ss.subdomain_index},
 			{"num_nodes", ss.num_nodes},
 			{"num_elements", ss.num_elements},
+			{"total_num_connectivity_entries", ss.total_num_connectivity_entries},
 			{"extent", ss.extent},
 			{"num_constituents", ss.num_constituents},
 			{"subconstituents", ss.subconstituents}
@@ -214,6 +227,7 @@ namespace fea_io
 		j.at("subdomain_index").get_to(ss.subdomain_index);
 		j.at("num_nodes").get_to(ss.num_nodes);
 		j.at("num_elements").get_to(ss.num_elements);
+		j.at("total_num_connectivity_entries").get_to(ss.total_num_connectivity_entries);
 		j.at("extent").get_to(ss.extent);
 		j.at("num_constituents").get_to(ss.num_constituents);
 		j.at("subconstituents").get_to(ss.subconstituents);
