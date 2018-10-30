@@ -70,9 +70,9 @@ namespace fea_io
 			min = { std::numeric_limits<CoordType>::max(),
 				std::numeric_limits<CoordType>::max(),
 				std::numeric_limits<CoordType>::max() };
-			max = { std::numeric_limits<CoordType>::min(),
-				std::numeric_limits<CoordType>::min(),
-				std::numeric_limits<CoordType>::min() };
+			max = { -std::numeric_limits<CoordType>::max(),
+				-std::numeric_limits<CoordType>::max(),
+				-std::numeric_limits<CoordType>::max() };
 		}
 		Extent(const std::array<CoordType, 3> min_a, const std::array<CoordType, 3> max_a) {
 			min = min_a;
@@ -157,16 +157,27 @@ namespace fea_io
 		j.at("partition_offsets").get_to(h.partition_offsets);
 	}
 
-	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	struct DataTypeSizes
 	{
-		const int8_t global_index_size = sizeof(GlobalIndex);
-		const int8_t local_index_size = sizeof(LocalIndex);
-		const int8_t coord_type_size = sizeof(CoordType);
+		int8_t global_index_size;
+		int8_t local_index_size;
+		int8_t coord_type_size;
+
+		template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+		void deduce() {
+			global_index_size = sizeof(GlobalIndex);
+			local_index_size = sizeof(LocalIndex);
+			coord_type_size = sizeof(CoordType);
+		}
+
+		bool is_large_enough(const DataTypeSizes& other) {
+			return global_index_size >= other.global_index_size &&
+				local_index_size >= other.local_index_size &&
+				coord_type_size >= other.coord_type_size;
+		}
 	};
 
-	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void to_json(json& j, const DataTypeSizes<GlobalIndex, LocalIndex, CoordType>& dti)
+	void to_json(json& j, const DataTypeSizes& dti)
 	{
 		j = json{ {"global_index_size", dti.global_index_size},
 			{"local_index_size", dti.local_index_size},
@@ -174,8 +185,7 @@ namespace fea_io
 		};
 	}
 
-	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void from_json(const json& j, DataTypeSizes<GlobalIndex, LocalIndex, CoordType>& dti)
+	void from_json(const json& j, DataTypeSizes& dti)
 	{
 		j.at("global_index_size").get_to(dti.global_index_size);
 		j.at("local_index_size").get_to(dti.local_index_size);
@@ -231,6 +241,7 @@ namespace fea_io
 			+ num_nodes_in_subcomponent * sizeof(LocalIndex)
 			+ sizeof(num_elements_in_subcomponent)
 			+ num_elements_in_subcomponent * sizeof(LocalIndex)
+			+ sizeof(LocalIndex) // # lcs parameters
 			+ num_lcs_parameters * sizeof(CoordType);
 	};
 
@@ -307,6 +318,24 @@ namespace fea_io
 		j.at("subcomponents").get_to(ss.subcomponents);
 	}
 
+	template<typename T0, typename T1>
+	bool compare_vec(const std::vector<T0>& v0, const std::vector<T1>& v1)
+	{
+		if (v0.size() != v1.size()) return false;
+		for (auto i = 0; i < v0.size(); i++)
+			if (!(v0[i] == v1[i])) return false;
+		return true;
+	}
+
+	template<typename T0, typename T1>
+	bool compare_vec_vec(const std::vector<T0>& v0, const std::vector<T1>& v1)
+	{
+		if (v0.size() != v1.size()) return false;
+		for (auto i = 0; i < v0.size(); i++)
+			if (!compare_vec(v0[i], v1[i])) return false;
+		return true;
+	}
+
 	/// Holds the data describing a subcomponent
 	template<typename LocalIndex, typename CoordType>
 	struct Subcomponent
@@ -315,6 +344,16 @@ namespace fea_io
 		std::vector<LocalIndex> nodes_in_subcomponent;
 		std::vector<LocalIndex> elements_in_subcomponent;
 		std::vector<CoordType> lcs_parameters_in_subcomponent;
+	};
+
+	template<typename LocalIndex, typename CoordType,
+		typename LocalIndex2, typename CoordType2>
+	bool operator ==(const Subcomponent<LocalIndex, CoordType>& lhs, const Subcomponent<LocalIndex2, CoordType2>& rhs)
+	{
+		return (lhs.component_id == rhs.component_id)
+			&& compare_vec(lhs.nodes_in_subcomponent, rhs.nodes_in_subcomponent)
+			&& compare_vec(lhs.elements_in_subcomponent, rhs.elements_in_subcomponent)
+			&& compare_vec(lhs.lcs_parameters_in_subcomponent, rhs.lcs_parameters_in_subcomponent);
 	};
 
 	/// Holds the mesh for a partition
@@ -341,5 +380,20 @@ namespace fea_io
 			element_types.resize(num_elements);
 			element_connectivities.resize(num_elements);
 		}
+	};
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType,
+		typename GlobalIndex2, typename LocalIndex2, typename CoordType2>
+	bool operator ==(const Partition<GlobalIndex, LocalIndex, CoordType>& lhs, const Partition<GlobalIndex2, LocalIndex2, CoordType2>& rhs)
+	{
+		return (lhs.partition_id == rhs.partition_id)
+			&& compare_vec(lhs.node_global_ids, rhs.node_global_ids)
+			&& compare_vec(lhs.node_parent_partitions, rhs.node_parent_partitions)
+			&& compare_vec(lhs.node_coords, rhs.node_coords)
+			&& compare_vec(lhs.element_global_ids, rhs.element_global_ids)
+			&& compare_vec(lhs.element_parent_partitions, rhs.element_parent_partitions)
+			&& compare_vec(lhs.element_types, rhs.element_types)
+			&& compare_vec_vec(lhs.element_connectivities, rhs.element_connectivities)
+			&& compare_vec(lhs.subcomponents, rhs.subcomponents);
 	};
 }

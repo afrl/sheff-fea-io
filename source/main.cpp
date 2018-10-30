@@ -1,9 +1,10 @@
-#include "MeshWriter.h"
-#include "MPIUtils.h"
-
 #include <functional>
 #include <iostream>
 #include <iomanip>
+
+#include "MeshParWriter.h"
+#include "MeshReader.h"
+#include "MPIUtils.h"
 
 using json = nlohmann::json;
 using namespace fea_io;
@@ -63,7 +64,7 @@ bool test_gather_vectors_int()
 		return true;
 }
 
-void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, double>& meta_info, std::vector<PartitionInfo<int16_t, int16_t, double>>& partitions)
+void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, float>& meta_info, std::vector<PartitionInfo<int16_t, int16_t, float>>& partitions)
 {
 	meta_info = {
 		9,
@@ -76,14 +77,15 @@ void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, double>& meta_info, 
 		{}
 	};
 
-	DataTypeSizes<int16_t, int16_t, double> data_types;
+	DataTypeSizes data_types;
+	data_types.deduce<int16_t, int16_t, float>();
 
 	SubcomponentInfo<int16_t> sc0 = { 0, 4, 1 };
 	SubcomponentInfo<int16_t> sc1 = { 0, 4, 1 };
 	SubcomponentInfo<int16_t> sc2 = { 1, 4, 1 };
 	SubcomponentInfo<int16_t> sc3 = { 1, 4, 1 };
 
-	PartitionInfo<int16_t, int16_t, double> part0 = {
+	PartitionInfo<int16_t, int16_t, float> part0 = {
 		0,
 		6,
 		2,
@@ -93,7 +95,7 @@ void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, double>& meta_info, 
 		{ sc0, sc2 }
 	};
 
-	PartitionInfo<int16_t, int16_t, double> part1 = {
+	PartitionInfo<int16_t, int16_t, float> part1 = {
 		1,
 		6,
 		2,
@@ -106,9 +108,9 @@ void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, double>& meta_info, 
 	partitions = { part0, part1 };
 }
 
-void write_part0(MeshWriter<int16_t, int16_t, double>& writer)
+auto get_part0()
 {
-	Partition<int16_t, int16_t, double> partition = {
+	Partition<int16_t, int16_t, float> partition = {
 		0,
 		{ 0, 1, 3, 4, 6, 7 },
 		{ 0, 0, 0, 0, 0, 0 },
@@ -122,12 +124,12 @@ void write_part0(MeshWriter<int16_t, int16_t, double>& writer)
 			{ 1, {2, 3, 4, 5}, {1}, {1, 0, 0, 0} },
 		}
 	};
-	writer.write_partition(partition);
+	return partition;
 }
 
-void write_part1(MeshWriter<int16_t, int16_t, double>& writer)
+auto get_part1()
 {
-	Partition<int16_t, int16_t, double> partition = {
+	Partition<int16_t, int16_t, float> partition = {
 		1,
 		{ 1, 2, 4, 5, 7, 8 },
 		{ 0, 1, 0, 1, 0, 1 },
@@ -141,32 +143,33 @@ void write_part1(MeshWriter<int16_t, int16_t, double>& writer)
 			{ 1, {2, 3, 4, 5}, {1}, {1, 0, 0, 0} },
 		}
 	};
-	writer.write_partition(partition);
+	return partition;
 }
 
 bool test_mesh_writer_serial()
 {
-	MeshMetaInfo<int16_t, int16_t, double> meta_info;
-	std::vector<PartitionInfo<int16_t, int16_t, double>> all_partitions;
-	get_test_subdomain_info(meta_info, all_partitions);
+	if (MPIUtils::get_local_rank() == 0) {
+		MeshMetaInfo<int16_t, int16_t, float> meta_info;
+		std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
+		get_test_subdomain_info(meta_info, all_partitions);
 
-	MeshWriter<int16_t, int16_t, double> writer("test_serial",
-		meta_info,
-		WriteMode::Serial);
+		MeshWriter<int16_t, int16_t, float> writer;
+		writer.initialize("test_serial", meta_info);
 
-	write_part0(writer);
-	write_part1(writer);
+		writer.write_partition(get_part0());
+		writer.write_partition(get_part1());
+	}
 
 	return true;
 }
 
 bool test_mesh_writer_parallel()
 {
-	MeshMetaInfo<int16_t, int16_t, double> meta_info;
-	std::vector<PartitionInfo<int16_t, int16_t, double>> all_partitions;
+	MeshMetaInfo<int16_t, int16_t, float> meta_info;
+	std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
 	get_test_subdomain_info(meta_info, all_partitions);
 
-	std::vector<PartitionInfo<int16_t, int16_t, double>> part_info_on_this_proc;
+	std::vector<PartitionInfo<int16_t, int16_t, float>> part_info_on_this_proc;
 	if (MPIUtils::get_num_local_ranks() > 1) {
 		if (MPIUtils::get_local_rank() == 0)
 			part_info_on_this_proc = { all_partitions[0] };
@@ -176,20 +179,34 @@ bool test_mesh_writer_parallel()
 	else
 		part_info_on_this_proc = all_partitions;
 
-	MeshWriter<int16_t, int16_t, double> writer("test_parallel", meta_info, WriteMode::Parallel);
+	MeshParWriter<int16_t, int16_t, float> writer;
+	writer.initialize("test_parallel", meta_info);
 	for (auto& pi : part_info_on_this_proc)
 		writer.queue_partition_for_write(pi);
 	writer.start_parallel_write_phase();
 
 	if (MPIUtils::get_num_local_ranks() > 1) {
 		if (MPIUtils::get_local_rank() == 0)
-			write_part0(writer);
+			writer.write_partition(get_part0());
 		else if (MPIUtils::get_local_rank() == 1)
-			write_part1(writer);
+			writer.write_partition(get_part1());
 	}
 	else {
-		write_part0(writer);
-		write_part1(writer);
+		writer.write_partition(get_part0());
+		writer.write_partition(get_part1());
+	}
+
+	return true;
+}
+
+bool test_mesh_reader()
+{
+	if (MPIUtils::get_local_rank() == 0) {
+		MeshReader<int32_t, int32_t, double> reader("test_serial");
+		auto part0 = reader.read_partition(0);
+		auto part1 = reader.read_partition(1);
+		return (part0 == get_part0())
+			&& (part1 == get_part1());
 	}
 
 	return true;
@@ -210,7 +227,8 @@ void illustrative_serial()
 	// about the mesh.  Note: we could specialize a class for serial and
 	// one for parallel writing.  It would simplify how much you need to
 	// give it for the serial case.  Would that be preferrable?
-	MeshWriter writer(
+	MeshWriter writer;
+	writer.initialize(
 		"/some/filepath/a_cool_mesh", // Where to put the json/binary files
 		9, // total # nodes
 		4, // total # elements
@@ -222,8 +240,7 @@ void illustrative_serial()
 		// coordinate systems are assigned
 		{ LCSParameterization::Quaternion, LCSParameterization::Quaternion }, // type
 		// of parameterization used for the local coordinate sytem
-		2, // # subdomains
-		WriteMode::Serial); // The flag for serial vs parallel
+		2); // # subdomains
 	//writer.write_partition(/* A bunch of parameters describing the mesh
 	//					   and local coordinate systems.*/);
 }
@@ -238,13 +255,14 @@ void illustrative_parallel()
 	// what you are reading).
 	//      Global indices   Local indices   Coordinates
 	//                  \          |          / 
-	typedef MeshWriter<int64_t, int32_t, double> MeshWriter;
+	typedef MeshParWriter<int64_t, int32_t, double> MeshWriter;
 
 	// Construct a writer object and tell it the high-level information
 	// about the mesh.  Note: we could specialize a class for serial and
 	// one for parallel writing.  It would simplify how much you need to
 	// give it for the serial case.  Would that be preferrable?
-	MeshWriter writer(
+	MeshWriter writer;
+	writer.initialize(
 		"/some/filepath/a_cool_mesh", // Where to put the json/binary files
 		9, // total # nodes
 		4, // total # elements
@@ -256,8 +274,7 @@ void illustrative_parallel()
 		// coordinate systems are assigned
 		{ LCSParameterization::Quaternion, LCSParameterization::Quaternion }, // type
 		// of parameterization used for the local coordinate sytem
-		2, // # subdomains
-		WriteMode::Parallel); // The flag for serial vs parallel
+		2); // # subdomains
 
 	// Before you write, you have to queue all the subdomains so the
 	// processors can figure out how to preallocate the file and write
@@ -294,6 +311,7 @@ int main(int argc, char **argv)
 	RUN_TEST(test_gather_vectors_int);
 	RUN_TEST(test_mesh_writer_serial);
 	RUN_TEST(test_mesh_writer_parallel);
+	RUN_TEST(test_mesh_reader);
 
 	/*
 	json j;
@@ -308,5 +326,7 @@ int main(int argc, char **argv)
 	assert(meta_info == meta_info_check);
 	*/
 
+	auto rank = MPIUtils::get_local_rank();
 	MPIUtils::finalize();
+	if (rank == 0) system("pause");
 }
