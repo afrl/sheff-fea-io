@@ -8,6 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "Common.h"
 #include "MeshStructs.h"
 #include "IOUtils.h"
 #include "Exceptions.h"
@@ -15,17 +16,6 @@
 namespace fea_io
 {
 	using json = nlohmann::json;
-
-	enum class WriteMode : char {
-		Serial,
-		Parallel
-	};
-	enum class WriteState : char {
-		Uninitialized,
-		QueuePhase,
-		WritePhase,
-		Finalized
-	};
 
 	/// A class for writing a two-part mesh file(s) composed of a JSON and binary file.
 	/// The class supports serial and parallel I/O through the same interface.

@@ -181,7 +181,7 @@ namespace fea_io
 		auto all_partition_info = Parent::partition_infos_;
 #endif
 
-		// Compute the size needed for each domain, and save the size required
+		// Compute the size needed for each partition, and save the size required
 		// for each partition within an ordered vector (this means that the
 		// partitions will ordered by index within the binary file)
 		std::vector<std::streamoff> partition_byte_sizes(all_partition_info.size(), 0);
