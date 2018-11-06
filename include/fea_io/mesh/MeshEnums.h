@@ -2,7 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include "common/Exceptions.h"
+#include "fea_io/common/Exceptions.h"
 
 namespace fea_io
 {

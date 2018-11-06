@@ -1,6 +1,7 @@
 set(FEA_IO_DEV_TARGET_NAME ${PROJECT_NAME}_dev)
 add_executable(${FEA_IO_DEV_TARGET_NAME} src/main.cpp)
-target_include_directories(${FEA_IO_DEV_TARGET_NAME} PUBLIC ${FEA_IO_INCLUDE})
+target_link_libraries(${FEA_IO_DEV_TARGET_NAME} PRIVATE ${FEA_IO_TARGET_NAME})
+assign_source_group(${FEA_IO_HEADER_LIST})
 
 # Configure MPI if it was found
 if(MPI_FOUND)
