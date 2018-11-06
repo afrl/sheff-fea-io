@@ -8,10 +8,10 @@
 
 #include <nlohmann/json.hpp>
 
-#include "Common.h"
+#include "common/Common.h"
+#include "common/Exceptions.h"
+#include "common/IOUtils.h"
 #include "MeshStructs.h"
-#include "IOUtils.h"
-#include "Exceptions.h"
 
 namespace fea_io
 {

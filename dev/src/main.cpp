@@ -2,9 +2,9 @@
 #include <iostream>
 #include <iomanip>
 
-#include "MeshParWriter.h"
-#include "MeshReader.h"
-#include "MPIUtils.h"
+#include "common/MPIUtils.h"
+#include "mesh/MeshParWriter.h"
+#include "mesh/MeshReader.h"
 
 using json = nlohmann::json;
 using namespace fea_io;

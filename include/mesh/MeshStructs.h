@@ -8,7 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include "MeshEnums.h"
-#include "Exceptions.h"
+#include "common/Exceptions.h"
 
 namespace fea_io
 {

@@ -2,9 +2,9 @@
 
 #include <fstream>
 
+#include "common/Exceptions.h"
+#include "common/IOUtils.h"
 #include "MeshStructs.h"
-#include "IOUtils.h"
-#include "Exceptions.h"
 
 namespace fea_io
 {

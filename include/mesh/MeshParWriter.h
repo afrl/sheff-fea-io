@@ -1,7 +1,7 @@
 #pragma once
 
 #ifdef HAVE_MPI
-#include "MPIUtils.h"
+#include "common/MPIUtils.h"
 #endif
 
 #include "MeshWriter.h"
