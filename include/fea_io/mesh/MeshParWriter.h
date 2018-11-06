@@ -27,12 +27,14 @@ namespace fea_io
 	class MeshParWriter : public MeshWriter<GlobalIndex, LocalIndex, CoordType>
 	{
 	public:
-		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MetaInfo;
+		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MeshMetaInfoType;
+		typedef PartitionInfo<GlobalIndex, LocalIndex, CoordType> PartitionInfoType;
+		typedef Partition<GlobalIndex, LocalIndex, CoordType> PartitionType;
 
 		using MeshWriter<GlobalIndex, LocalIndex, CoordType>::MeshWriter;
 
 		/// This needs to be called for each partition before writing begins.  An error will be thrown otherwise.
-		void queue_partition_for_write(const PartitionInfo<GlobalIndex, LocalIndex, CoordType>& part_info);
+		void queue_partition_for_write(const PartitionInfoType& part_info);
 
 		/// This must be called after all the queue_partition_for_write calls
 		/// have been made, but before write_partition is ever called.
@@ -47,7 +49,7 @@ namespace fea_io
 		///   must be the same size. They must also match the number of nodes given earlier for the partition.
 		/// - subcomponents.component_ids_of_subcomponents must match the component IDs given for the
 		///   partition (in the vector of subcomponent structs)
-		virtual void write_partition(const Partition<GlobalIndex, LocalIndex, CoordType>& partition) override;
+		virtual void write_partition(const PartitionType& partition) override;
 
 		/// TODO: implement this method once this class has been debugged
 		/// Takes an iterator adapter (see MeshIteratorAdapters.h for reference) for the begin and end of
@@ -56,6 +58,11 @@ namespace fea_io
 		void write_partition(
 			const NodeIteratorAdapter node_begin, const NodeIteratorAdapter node_end,
 			const ElementIteratorAdapter element_begin, const ElementIteratorAdapter element_end);
+
+		/// Close the binary file, writes the JSON file, and resets the MeshParWriter object. 
+		/// Note: this gets call with the destructor, so you don't have to call it unless
+		/// you want to force it to up the files.
+		virtual void close() override;
 
 	protected:
 		
@@ -72,7 +79,7 @@ namespace fea_io
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void MeshParWriter<GlobalIndex, LocalIndex, CoordType>::queue_partition_for_write(const PartitionInfo<GlobalIndex, LocalIndex, CoordType>& partition_info)
+	inline void MeshParWriter<GlobalIndex, LocalIndex, CoordType>::queue_partition_for_write(const PartitionInfoType& partition_info)
 	{
 		if (Parent::write_state_ != WriteState::QueuePhase)
 			throw _MSG_EXCEPT_C("Attempted to queue a partition while not in queue phase.  If in serial, then you can write immediately.");
@@ -123,7 +130,7 @@ namespace fea_io
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void fea_io::MeshParWriter<GlobalIndex, LocalIndex, CoordType>::write_partition(const Partition<GlobalIndex, LocalIndex, CoordType> & partition)
+	inline void fea_io::MeshParWriter<GlobalIndex, LocalIndex, CoordType>::write_partition(const PartitionType & partition)
 	{
 		if (Parent::write_state_ != WriteState::WritePhase)
 			throw _MSG_EXCEPT_C("Attempted to write a partition while not in write phase.  If in parallel, be sure to call start_parallel_write_phase() after queuing the information.");
@@ -158,6 +165,13 @@ namespace fea_io
 
 		auto actual_size = Parent::write_partition_kernel(partition);
 
+		// If the extent was not calculated when the partition info was queued, then
+		// calculate it now.
+		if (partition_info.extent.is_limit())
+			partition_info.extent = calculate_extent(partition.node_coords, meta_info_.dimensionality);
+
+		update_subcomponent_offsets(partition_info);
+
 		auto expected_size = std::find_if(Parent::partition_infos_.begin(), Parent::partition_infos_.end(),
 			[id = partition.partition_id](const PartitionInfo<GlobalIndex, LocalIndex, CoordType>& x) -> bool {
 			return x.partition_id == id;
@@ -166,6 +180,37 @@ namespace fea_io
 		if (actual_size != expected_size)
 			throw _MSG_EXCEPT_C("The data written for partition " + std::to_string(partition.partition_id) + " exceeded the space allocated for it."
 				+ " Expected size of " + std::to_string(expected_size) + " but actually ended at " + std::to_string(actual_size) + ".");
+	}
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	inline void MeshParWriter<GlobalIndex, LocalIndex, CoordType>::close()
+	{
+		out_stream_.close();
+
+		// Only rank 0 should write the JSON file
+		if (MPIUtils::get_local_rank() == 0) {
+#ifdef HAVE_MPI
+			// The root rank will get the entire list of partition info, which will allow it
+			// to calculate the appropriate offsets.
+			auto all_partition_info = MPIUtils::gather_vectors(Parent::partition_infos_);
+#else
+			// If this was not compiled using MPI, the the process must have all of the data already
+			auto all_partition_info = Parent::partition_infos_;
+#endif
+
+			std::ofstream json_component(file_path_ + ".json");
+			json j;
+			j["meta_info"] = meta_info_;
+			j["partition_info"] = all_partition_info;
+			DataTypeSizes data_types;
+			data_types.deduce<GlobalIndex, LocalIndex, CoordType>();
+			j["types"] = data_types;
+			json_component << std::setw(4) << j << std::endl;
+			json_component.close();
+		}
+
+		
+		write_state_ = WriteState::Finalized;
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>

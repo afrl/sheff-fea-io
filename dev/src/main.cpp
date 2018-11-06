@@ -90,7 +90,7 @@ void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, float>& meta_info, s
 		6,
 		2,
 		8,
-		{ {0, 0, 0}, {0.5, 0.5, 0} },
+		Extent<float>(),
 		2,
 		{ sc0, sc2 }
 	};
@@ -100,7 +100,7 @@ void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, float>& meta_info, s
 		6,
 		2,
 		8,
-		{ {0.5, 0.5, 0}, {1, 1, 0} },
+		Extent<float>(),
 		2,
 		{ sc1, sc3 }
 	};

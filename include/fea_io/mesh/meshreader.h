@@ -4,6 +4,8 @@
 
 #include "fea_io/common/Exceptions.h"
 #include "fea_io/common/IOUtils.h"
+
+#include "MeshInfoStructs.h"
 #include "MeshStructs.h"
 
 namespace fea_io
@@ -18,16 +20,21 @@ namespace fea_io
 	class MeshReader
 	{
 	public:
-		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MetaInfo;
+		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MeshMetaInfoType;
+		typedef PartitionInfo<GlobalIndex, LocalIndex, CoordType> PartitionInfoType;
+		typedef Partition<GlobalIndex, LocalIndex, CoordType> PartitionType;
 
 		MeshReader(const std::string file_path);
 		~MeshReader();
 
 		/// Read a particular partition from the file
-		Partition<GlobalIndex, LocalIndex, CoordType> read_partition(const LocalIndex& partition_id);
+		PartitionType read_partition(const LocalIndex& partition_id);
+
+
 
 	private:
-		MetaInfo meta_info_;
+		MeshMetaInfoType meta_info_;
+		std::vector<PartitionInfoType> partition_infos_;
 		DataTypeSizes data_types_in_file;
 		std::ifstream in_stream_;
 		const std::string binary_ext = ".bin";
@@ -43,6 +50,13 @@ namespace fea_io
 		json_component.close();
 
 		meta_info_ = j["meta_info"];
+		// Note: standard container overloads operator= so a simple:
+		// partition_infos_ = j["partition_info"];
+		// would throw an ambiguity error.
+		for (auto& obj : j["partition_info"]) {
+			PartitionInfoType part_info = obj;
+			partition_infos_.push_back(part_info);
+		}
 
 		// Check data_types
 		DataTypeSizes data_types;
@@ -68,14 +82,11 @@ namespace fea_io
 		Partition<GlobalIndex, LocalIndex, CoordType> partition;
 
 		// Read high-level information
-		LocalIndex num_nodes;
-		LocalIndex num_elements;
-		Extent<CoordType> extent;
+		LocalIndex num_nodes = partition_infos_[partition_id].num_nodes;
+		LocalIndex num_elements = partition_infos_[partition_id].num_elements;
 		IOUtils::binary_read(in_stream_, partition.partition_id, data_types_in_file.local_index_size);
-		IOUtils::binary_read(in_stream_, num_nodes, data_types_in_file.local_index_size);
-		IOUtils::binary_read(in_stream_, num_elements, data_types_in_file.local_index_size);
-		IOUtils::binary_read(in_stream_, extent.min, data_types_in_file.coord_type_size);
-		IOUtils::binary_read(in_stream_, extent.max, data_types_in_file.coord_type_size);
+		if (partition_id != partition.partition_id)
+			throw _MSG_EXCEPT_C("The partition id in the file did not match the one requested, indicating a corrupted lookup table.  Perhaps the JSON file was changed externally.");
 		// Read node information
 		partition.node_global_ids.resize(num_nodes);
 		partition.node_parent_partitions.resize(num_nodes);
@@ -100,10 +111,7 @@ namespace fea_io
 			IOUtils::binary_read(in_stream_, partition.element_connectivities[i], num_nodes_for_elem, data_types_in_file.local_index_size);
 		}
 		// Read subcomponent information
-		LocalIndex num_subcomponents;
-		std::vector<std::streamoff> subcomponent_offsets;
-		IOUtils::binary_read(in_stream_, num_subcomponents, data_types_in_file.local_index_size);
-		IOUtils::binary_read(in_stream_, subcomponent_offsets, num_subcomponents, sizeof(std::streamoff));
+		LocalIndex num_subcomponents = partition_infos_[partition_id].num_subcomponents;
 		for (auto i = 0; i < num_subcomponents; i++) {
 			Subcomponent<LocalIndex, CoordType> subcomponent;
 			LocalIndex num_nodes_in_subcomponent;

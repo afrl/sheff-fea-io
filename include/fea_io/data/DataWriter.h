@@ -8,13 +8,13 @@
 
 #include <nlohmann/json.hpp>
 
-#include "Common.h"
-#include "MeshStructs.h"
-#include "IOUtils.h"
-#include "Exceptions.h"
+#include "fea_io/common/Common.h"
+#include "fea_io/common/Exceptions.h"
+#include "fea_io/common/IOUtils.h"
+#include "fea_io/mesh/MeshStructs.h"
 
 #ifdef HAVE_MPI
-#include "MPIUtils.h"
+#include "fea_io/common/MPIUtils.h"
 #endif
 
 namespace fea_io
@@ -65,19 +65,19 @@ namespace fea_io
 	class DataWriter
 	{
 	public:
-		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MeshMetaInfo;
-		typedef PartitionInfo<GlobalIndex, LocalIndex, CoordType> PartitionInfo;
-		typedef DataArrayInfo<LocalIndex, CoordType> DataArrayInfo;
+		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MeshMetaInfoType;
+		typedef PartitionInfo<GlobalIndex, LocalIndex, CoordType> PartitionInfoType;
+		typedef DataArrayInfo<LocalIndex, CoordType> DataArrayInfoType;
 
 		explicit DataWriter();
 		virtual ~DataWriter();
 
 		void initialize(
 			const std::string file_path,
-			const MeshMetaInfo mesh_info,
-			const std::vector<PartitionInfo> partition_info,
+			const MeshMetaInfoType mesh_info,
+			const std::vector<PartitionInfoType> partition_info,
 			const std::vector<LocalIndex> num_quad_points_in_partitions,
-			const std::vector<DataArrayInfo> data_array_infos);
+			const std::vector<DataArrayInfoType> data_array_infos);
 
 		// Writes value
 		void write(
@@ -99,6 +99,12 @@ namespace fea_io
 			const LocalIndex num_values,
 			const CoordType** data);
 
+		// Writes array
+		void write_by_quad_point(
+			const LocalIndex partition_id,
+			const LocalIndex data_array_id,
+			const LocalIndex num_values,
+			const CoordType** data);
 		
 		/// Close the binary file, writes the JSON file, and resets the DataWriter object. 
 		/// Note: this gets call with the destructor, so you don't have to call it unless
@@ -107,8 +113,8 @@ namespace fea_io
 
 	protected:
 		MeshMetaInfo mesh_info_;
-		std::vector<PartitionInfo> partition_infos_;
-		std::vector<DataArrayInfo> data_array_infos_;
+		std::vector<PartitionInfoType> partition_infos_;
+		std::vector<DataArrayInfoType> data_array_infos_;
 		std::vector<std::vector<std::streamoff>> data_array_write_positions_;
 		WriteState write_state_;
 		std::string file_path_;
@@ -132,7 +138,7 @@ namespace fea_io
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string file_path, const MeshMetaInfo mesh_info, const std::vector<PartitionInfo> partition_info, const std::vector<LocalIndex> num_quad_points_in_partitions, const std::vector<DataArrayInfo> data_array_infos)
+	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string file_path, const MeshMetaInfoType mesh_info, const std::vector<PartitionInfoType> partition_info, const std::vector<LocalIndex> num_quad_points_in_partitions, const std::vector<DataArrayInfoType> data_array_infos)
 	{
 		if (write_state_ != WriteState::Uninitialized && write_state_ != WriteState::Finalized)
 			throw _MSG_EXCEPT_C("initialize(...) can only be called after construction or close().");
