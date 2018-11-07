@@ -8,7 +8,7 @@ namespace fea_io
 {
 	using json = nlohmann::json;
 
-	enum class DataArrayType {
+	enum class ArrayType {
 		Node, /// One value/vector per a node
 		Element, /// One value/vector per an element
 		NodeByElement, /// A value/vector for each node in each element (nodes have multiple values if shared between elements)
@@ -16,15 +16,19 @@ namespace fea_io
 		QuadPointByElement, /// One value/vector per a quad point per an element
 	};
 
-	template<typename LocalIndex, typename CoordType>
-	struct DataArrayInfo
-	{
-		typedef CoordType ValueType;
+	enum class ArrayDataType {
+		FloatingPoint,
+		Integral
+	};
 
+	struct ArrayInfo
+	{
 		// Set by constructor
-		LocalIndex id;
-		DataArrayType type;
-		LocalIndex num_comps;
+		int32_t id;
+		ArrayType type;
+		ArrayDataType data_type;
+		int32_t data_type_num_bytes;
+		int32_t num_comps;
 		std::string name;
 		std::vector<std::string> comp_names;
 		// The following variables are set by DataWriter::initialize
@@ -33,45 +37,59 @@ namespace fea_io
 		// Note: excluded from JSON conversion
 		std::vector<std::streamoff> curr_bytes_written;
 
-		DataArrayInfo() {};
+		ArrayInfo() {};
 
-		DataArrayInfo(
-			const LocalIndex id_a,
-			const DataArrayType type_a,
-			const LocalIndex num_comps_a,
+		template<typename ValueType>
+		void initialize(
+			const int32_t id_a,
+			const ArrayType type_a,
+			const int32_t num_comps_a,
 			const std::string name_a,
 			const std::vector<std::string> comp_names_a)
-			: id(id_a), type(type_a), num_comps(num_comps_a), name(name_a), comp_names(comp_names_a)
 		{
+			id = id_a;
+			type = type_a;
+			num_comps = num_comps_a;
+			name = name_a;
+			comp_names = comp_names_a;
+
+			if (std::is_floating_point<ValueType>::value)
+				data_type = ArrayDataType::FloatingPoint;
+			else if (std::is_integral<ValueType>::value)
+				data_type = ArrayDataType::Integral;
+			else
+				throw _MSG_EXCEPT_C("Currently the format only supports floating and integral data types.");
+			data_type_num_bytes = sizeof(ValueType);
 		}
 
 		template<typename PartitionInfo>
-		std::streamoff get_size_needed(const PartitionInfo& pi, const LocalIndex& total_num_quad_points)
+		std::streamoff get_size_needed(const PartitionInfo& pi, const int64_t& total_num_quad_points)
 		{
-			if (type == DataArrayType::Node)
-				return pi.num_nodes * num_comps * sizeof(CoordType);
-			else if (type == DataArrayType::Element)
-				return pi.num_elements * num_comps * sizeof(CoordType);
-			else if (type == DataArrayType::NodeByElement)
-				return pi.total_num_connectivity_entries * num_comps * sizeof(CoordType);
-			else if (type == DataArrayType::NodeByComponent) {
+			if (type == ArrayType::Node)
+				return pi.num_nodes * num_comps * data_type_num_bytes;
+			else if (type == ArrayType::Element)
+				return pi.num_elements * num_comps * data_type_num_bytes;
+			else if (type == ArrayType::NodeByElement)
+				return pi.total_num_connectivity_entries * num_comps * data_type_num_bytes;
+			else if (type == ArrayType::NodeByComponent) {
 				std::streamoff size_needed = 0;
 				for (auto& subcomponent_info : pi.subcomponents)
-					size_needed += subcomponent_info.num_nodes_in_subcomponent * num_comps * sizeof(CoordType);
+					size_needed += subcomponent_info.num_nodes_in_subcomponent * num_comps * data_type_num_bytes;
 				return size_needed;
 			}
-			else if (type == DataArrayType::QuadPointByElement)
-				return total_num_quad_points * num_comps * sizeof(CoordType);
+			else if (type == ArrayType::QuadPointByElement)
+				return total_num_quad_points * num_comps * data_type_num_bytes;
 			else
 				throw _MSG_EXCEPT_C("Unrecognized data array type.");
 		}
 	};
 
-	template<typename LocalIndex, typename CoordType>
-	void to_json(json& j, const DataArrayInfo<LocalIndex, CoordType>& ss)
+	void to_json(json& j, const ArrayInfo& ss)
 	{
 		j = json{ {"id", ss.id},
 			{"type", ss.type},
+			{"data_type", ss.data_type},
+			{"data_type_num_bytes", ss.data_type_num_bytes},
 			{"num_comps", ss.num_comps},
 			{"name", ss.name},
 			{"comp_names", ss.comp_names},
@@ -80,11 +98,12 @@ namespace fea_io
 		};
 	}
 
-	template<typename LocalIndex, typename CoordType>
-	void from_json(const json& j, DataArrayInfo<LocalIndex, CoordType>& ss)
+	void from_json(const json& j, ArrayInfo& ss)
 	{
 		j.at("id").get_to(ss.id);
 		j.at("type").get_to(ss.type);
+		j.at("data_type").get_to(ss.data_type);
+		j.at("data_type_num_bytes").get_to(ss.data_type_num_bytes);
 		j.at("num_comps").get_to(ss.num_comps);
 		j.at("name").get_to(ss.name);
 		j.at("comp_names").get_to(ss.comp_names);

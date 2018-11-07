@@ -67,31 +67,28 @@ bool test_gather_vectors_int()
 		return true;
 }
 
-std::vector<DataArrayInfo<int16_t, float>> get_test_data_info()
+template<typename FloatType>
+std::vector<ArrayInfo> get_test_data_info()
 {
-	std::vector<DataArrayInfo<int16_t, float>> data_info = {
-		{
-			0,
-			DataArrayType::Node,
-			2,
-			"Displacement",
-			{"u", "v"}
-		},
-		{
-			1,
-			DataArrayType::NodeByComponent,
-			3,
-			"StressGlobal",
-			{"xx", "yy", "xy"}
-		},
-		{
-			2,
-			DataArrayType::QuadPointByElement,
-			3,
-			"StressGlobal",
-			{"xx", "yy", "xy"}
-		}
-	};
+	std::vector<ArrayInfo> data_info(3);
+	data_info[0].initialize<float>(
+		0,
+		ArrayType::Node,
+		2,
+		"Displacement",
+		{ "u", "v" });
+	data_info[1].initialize<float>(
+		1,
+		ArrayType::NodeByComponent,
+		3,
+		"StressGlobal",
+		{ "xx", "yy", "xy" });
+	data_info[2].initialize<float>(
+		2,
+		ArrayType::QuadPointByElement,
+		3,
+		"StressGlobal",
+		{ "xx", "yy", "xy" });
 	return data_info;
 }
 
@@ -269,7 +266,7 @@ bool test_data_writer()
 		MeshMetaInfo<int16_t, int16_t, float> meta_info;
 		std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
 		get_test_info(meta_info, all_partitions);
-		auto data_info = get_test_data_info();
+		auto data_info = get_test_data_info<float>();
 
 		DataWriter<int16_t, int16_t, float> writer;
 		writer.initialize("test_serial_data", meta_info, all_partitions, {8, 8}, data_info);
@@ -289,13 +286,13 @@ bool test_data_writer()
 bool test_data_reader()
 {
 	if (MPIUtils::get_local_rank() == 0) {
-		DataReader<int32_t, int32_t, double> reader("test_serial_data");
-		auto data0_0 = reader.read(0, 0);
-		auto data0_1 = reader.read(0, 1);
-		auto data0_2 = reader.read(0, 2);
-		auto data1_0 = reader.read(1, 0);
-		auto data1_1 = reader.read(1, 1);
-		auto data1_2 = reader.read(1, 2);
+		DataReader reader("test_serial_data");
+		std::vector<double> data0_0; reader.read(0, 0, data0_0);
+		std::vector<double> data0_1; reader.read(0, 1, data0_1);
+		std::vector<double> data0_2; reader.read(0, 2, data0_2);
+		std::vector<double> data1_0; reader.read(1, 0, data1_0);
+		std::vector<double> data1_1; reader.read(1, 1, data1_1);
+		std::vector<double> data1_2; reader.read(1, 2, data1_2);
 
 		auto data0 = get_part0_data();
 		auto data1 = get_part1_data();
