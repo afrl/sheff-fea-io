@@ -38,8 +38,8 @@ namespace fea_io
 		void reset() {
 			initialized = false;
 			local_comm = MPI_COMM_NULL;
-			global_rank = -1;
-			local_rank = -1;
+			global_rank = 0;
+			local_rank = 0;
 			num_groups = 0;
 			local_group_key = 0;
 			root_ranks.clear();
@@ -53,6 +53,10 @@ namespace fea_io
 		/// call this method.  The communicators will be split up by group key.
 		/// Every process with the same key will be placed in teh same comm.
 		static void init(int *argc, char ***argv, const int group_key = 0, const bool quiet = true);
+
+		/// Creates a barrier such that each process (in the respective communicator)
+		/// will wait until every process gets to.
+		static void barrier(const bool use_local_comm = true);
 
 		/// Each process pass the same type of object on this call, and whatever is on the root
 		/// process will get distributed out to all of the others so the object passed to this
@@ -100,12 +104,7 @@ namespace fea_io
 		static const MPI_Comm get_local_comm() { return get_state().local_comm; }
 
 		/// Returns the number of ranks in the local communicator
-		static const int get_num_local_ranks() {
-			const MPIUtilsState& state = fea_io::MPIUtils::get_state();
-			int comm_size;
-			MPI_Comm_size(state.local_comm, &comm_size);
-			return comm_size;
-		};
+		static const int get_num_local_ranks();
 
 		static void finalize();
 
@@ -124,6 +123,7 @@ namespace fea_io
 
 	inline void fea_io::MPIUtils::init(int * argc, char *** argv, const int group_key, const bool quiet)
 	{
+#ifdef HAVE_MPI
 		MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// If the object has already been initialized, just return
@@ -198,11 +198,24 @@ namespace fea_io
 			for (unsigned int i = 0; i < state.root_ranks.size(); i++)
 				std::cout << "[" << i << "] " << state.root_ranks[i] << std::endl;
 		}
+#endif
+	}
+
+	inline void MPIUtils::barrier(const bool use_local_comm)
+	{
+#ifdef HAVE_MPI
+		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+
+		// Select which comm to use for all MPI operations in this call
+		MPI_Comm comm = use_local_comm ? state.local_comm : MPI_COMM_WORLD;
+		MPI_Barrier(comm);
+#endif
 	}
 
 	template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type*>
 	inline void fea_io::MPIUtils::update_from_root(T & obj_on_this_proc, const bool use_local_comm)
 	{
+#ifdef HAVE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Select which comm to use for all MPI operations in this call
@@ -237,11 +250,13 @@ namespace fea_io
 			json j = json::from_cbor(serialized_object);
 			obj_on_this_proc = j;
 		}
+#endif
 	}
 
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline static std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
 	{
+#ifdef HAVE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Select which comm to use for all MPI operations in this call
@@ -303,11 +318,15 @@ namespace fea_io
 			// Just return an empty container for all by the root rank
 			return std::vector<T>();
 		}
+#else
+		return data_from_this_proc;
+#endif
 	}
 
 	template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type*>
 	inline static std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
 	{
+#ifdef HAVE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Select which comm to use for all MPI operations in this call
@@ -359,11 +378,15 @@ namespace fea_io
 			MPIUtils::gather_vectors(num_bytes_for_each_object, use_local_comm);
 			return std::vector<T>();
 		}
+#else
+		return data_from_this_proc;
+#endif
 	}
 
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline void MPIUtils::send_to_group(const std::vector<T> data, int target_group_key)
 	{
+#ifdef HAVE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Only let the local root send information
@@ -373,11 +396,13 @@ namespace fea_io
 		// Send as a char array.  It is up to the other program to receive with the correct
 		// templated type.
 		MPI_Send(&data[0], data.size() * sizeof(T), MPI_CHAR, state.root_ranks[target_group_key], 0, MPI_COMM_WORLD);
+#endif
 	}
 
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline void MPIUtils::receive_from_group(std::vector<T>& data, int target_group_key)
 	{
+#ifdef HAVE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Only let the local root send information
@@ -396,13 +421,28 @@ namespace fea_io
 
 		// Do the receive
 		MPI_Recv(&data[0], data.size() * sizeof(T), MPI_CHAR, state.root_ranks[target_group_key], 0, MPI_COMM_WORLD, &status);
+#endif
+	}
+
+	inline const int MPIUtils::get_num_local_ranks()
+	{
+#ifdef HAVE_MPI
+		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		int comm_size;
+		MPI_Comm_size(state.local_comm, &comm_size);
+		return comm_size;
+#else
+		return 0;
+#endif
 	}
 
 	inline void MPIUtils::finalize()
 	{
+#ifdef HAVE_MPI
 		MPIUtilsState& state = fea_io::MPIUtils::get_state();
 		state.reset();
 
 		MPI_Finalize();
+#endif
 	}
 }

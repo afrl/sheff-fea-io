@@ -2,7 +2,10 @@
 #include <iostream>
 #include <iomanip>
 
+#include "fea_io/common/Comparators.h"
 #include "fea_io/common/MPIUtils.h"
+#include "fea_io/data/DataReader.h"
+#include "fea_io/data/DataWriter.h"
 #include "fea_io/mesh/MeshParWriter.h"
 #include "fea_io/mesh/MeshReader.h"
 
@@ -64,7 +67,55 @@ bool test_gather_vectors_int()
 		return true;
 }
 
-void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, float>& meta_info, std::vector<PartitionInfo<int16_t, int16_t, float>>& partitions)
+std::vector<DataArrayInfo<int16_t, float>> get_test_data_info()
+{
+	std::vector<DataArrayInfo<int16_t, float>> data_info = {
+		{
+			0,
+			DataArrayType::Node,
+			2,
+			"Displacement",
+			{"u", "v"}
+		},
+		{
+			1,
+			DataArrayType::NodeByComponent,
+			3,
+			"StressGlobal",
+			{"xx", "yy", "xy"}
+		},
+		{
+			2,
+			DataArrayType::QuadPointByElement,
+			3,
+			"StressGlobal",
+			{"xx", "yy", "xy"}
+		}
+	};
+	return data_info;
+}
+
+std::vector<std::vector<float>> get_part0_data()
+{
+	std::vector<std::vector<float>> data = {
+		{0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0},
+		{1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0},
+		{1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0}
+	};
+	return data;
+}
+
+std::vector<std::vector<float>> get_part1_data()
+{
+	std::vector<std::vector<float>> data = {
+		{0.5, 0, 0.75, 0, 0.5, 0, 0.75, 0, 0.5, 0, 0.75, 0},
+		{2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0},
+		{2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0}
+	};
+	return data;
+}
+
+void get_test_info(MeshMetaInfo<int16_t, int16_t, float>& meta_info, std::vector<PartitionInfo<int16_t, int16_t, float>>& partitions)
 {
 	meta_info = {
 		9,
@@ -151,7 +202,7 @@ bool test_mesh_writer_serial()
 	if (MPIUtils::get_local_rank() == 0) {
 		MeshMetaInfo<int16_t, int16_t, float> meta_info;
 		std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
-		get_test_subdomain_info(meta_info, all_partitions);
+		get_test_info(meta_info, all_partitions);
 
 		MeshWriter<int16_t, int16_t, float> writer;
 		writer.initialize("test_serial", meta_info);
@@ -167,7 +218,7 @@ bool test_mesh_writer_parallel()
 {
 	MeshMetaInfo<int16_t, int16_t, float> meta_info;
 	std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
-	get_test_subdomain_info(meta_info, all_partitions);
+	get_test_info(meta_info, all_partitions);
 
 	std::vector<PartitionInfo<int16_t, int16_t, float>> part_info_on_this_proc;
 	if (MPIUtils::get_num_local_ranks() > 1) {
@@ -207,6 +258,54 @@ bool test_mesh_reader()
 		auto part1 = reader.read_partition(1);
 		return (part0 == get_part0())
 			&& (part1 == get_part1());
+	}
+
+	return true;
+}
+
+bool test_data_writer()
+{
+	if (MPIUtils::get_local_rank() == 0) {
+		MeshMetaInfo<int16_t, int16_t, float> meta_info;
+		std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
+		get_test_info(meta_info, all_partitions);
+		auto data_info = get_test_data_info();
+
+		DataWriter<int16_t, int16_t, float> writer;
+		writer.initialize("test_serial_data", meta_info, all_partitions, {8, 8}, data_info);
+
+		auto data0 = get_part0_data();
+		auto data1 = get_part1_data();
+
+		for (auto i = 0; i < data0.size(); i++) {
+			writer.write(0, i, static_cast<int16_t>(data0[i].size()) / data_info[i].num_comps, &data0[i][0]);
+			writer.write(1, i, static_cast<int16_t>(data1[i].size()) / data_info[i].num_comps, &data1[i][0]);
+		}
+	}
+
+	return true;
+}
+
+bool test_data_reader()
+{
+	if (MPIUtils::get_local_rank() == 0) {
+		DataReader<int32_t, int32_t, double> reader("test_serial_data");
+		auto data0_0 = reader.read(0, 0);
+		auto data0_1 = reader.read(0, 1);
+		auto data0_2 = reader.read(0, 2);
+		auto data1_0 = reader.read(1, 0);
+		auto data1_1 = reader.read(1, 1);
+		auto data1_2 = reader.read(1, 2);
+
+		auto data0 = get_part0_data();
+		auto data1 = get_part1_data();
+
+		return compare_vec(data0_0, data0[0])
+			&& compare_vec(data0_1, data0[1])
+			&& compare_vec(data0_2, data0[2])
+			&& compare_vec(data1_0, data1[0])
+			&& compare_vec(data1_1, data1[1])
+			&& compare_vec(data1_2, data1[2]);
 	}
 
 	return true;
@@ -312,7 +411,9 @@ int main(int argc, char **argv)
 	RUN_TEST(test_mesh_writer_serial);
 	RUN_TEST(test_mesh_writer_parallel);
 	RUN_TEST(test_mesh_reader);
-
+	RUN_TEST(test_data_writer);
+	RUN_TEST(test_data_reader);
+	
 	/*
 	json j;
 	j["meta_info"] = meta_info;

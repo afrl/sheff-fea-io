@@ -30,7 +30,7 @@ namespace fea_io
 		/// Read a particular partition from the file
 		PartitionType read_partition(const LocalIndex& partition_id);
 
-
+		const std::vector<PartitionInfoType>& get_partition_info() const { return partition_infos_; };
 
 	private:
 		MeshMetaInfoType meta_info_;

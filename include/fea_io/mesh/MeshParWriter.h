@@ -1,8 +1,6 @@
 #pragma once
 
-#ifdef HAVE_MPI
 #include "fea_io/common/MPIUtils.h"
-#endif
 
 #include "MeshWriter.h"
 
@@ -189,14 +187,9 @@ namespace fea_io
 
 		// Only rank 0 should write the JSON file
 		if (MPIUtils::get_local_rank() == 0) {
-#ifdef HAVE_MPI
 			// The root rank will get the entire list of partition info, which will allow it
 			// to calculate the appropriate offsets.
 			auto all_partition_info = MPIUtils::gather_vectors(Parent::partition_infos_);
-#else
-			// If this was not compiled using MPI, the the process must have all of the data already
-			auto all_partition_info = Parent::partition_infos_;
-#endif
 
 			std::ofstream json_component(file_path_ + ".json");
 			json j;
@@ -216,15 +209,9 @@ namespace fea_io
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	inline std::streamoff MeshParWriter<GlobalIndex, LocalIndex, CoordType>::calculate_offsets()
 	{
-
-#ifdef HAVE_MPI
 		// The root rank will get the entire list of partition info, which will allow it
 		// to calculate the appropriate offsets.
 		auto all_partition_info = MPIUtils::gather_vectors(Parent::partition_infos_);
-#else
-		// If this was not compiled using MPI, the the process must have all of the data already
-		auto all_partition_info = Parent::partition_infos_;
-#endif
 
 		// Compute the size needed for each partition, and save the size required
 		// for each partition within an ordered vector (this means that the
