@@ -49,13 +49,15 @@ set(FEA_IO_HEADER_LIST
 	${FEA_IO_INCLUDE_SUB}/common/IOUtils.h
 	${FEA_IO_INCLUDE_SUB}/common/MPIUtils.h
 	${FEA_IO_INCLUDE_SUB}/data/DataReader.h
+	${FEA_IO_INCLUDE_SUB}/data/DataStructs.h
 	${FEA_IO_INCLUDE_SUB}/data/DataWriter.h
+	${FEA_IO_INCLUDE_SUB}/group/GroupReader.h
+	${FEA_IO_INCLUDE_SUB}/group/GroupWriter.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshEnums.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshInfoStructs.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshIteratorAdapters.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshParWriter.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshReader.h
-	${FEA_IO_INCLUDE_SUB}/mesh/Reader.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshStructs.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshWriter.h)
 set(FEA_IO_CONFIG_INSTALL_DIR "lib/cmake/${PROJECT_NAME}" CACHE INTERNAL "")
