@@ -13,7 +13,6 @@
 #include "fea_io/common/IOUtils.h"
 #include "fea_io/common/MPIUtils.h"
 #include "fea_io/mesh/MeshInfoStructs.h"
-#include "fea_io/mesh/MeshStructs.h"
 
 #include "DataStructs.h"
 
@@ -38,23 +37,24 @@ namespace fea_io
 			const std::vector<GlobalIndex> num_quad_points_in_partitions,
 			const std::vector<ArrayInfo> data_array_infos);
 
-		// Writes value for a single node, element, or quad point
-		// Note: the order for each partition should match the order in the mesh file.
+		// Writes value for a single node, element, or quad-point
+		// Note: the order of node/element/quad-point(s) for which this method is
+		//       called should match the order in the mesh file.
 		//       It is up to the calling program to ensure the order is correct.
 		template<typename DataType>
 		void write(
 			const LocalIndex partition_id,
 			const LocalIndex data_array_id,
-			const LocalIndex num_values,
-			const DataType* data);
+			const DataType* data,
+			const LocalIndex num_values = 1);
 
 		// Writes array
 		template<typename DataType>
 		void write(
 			const LocalIndex partition_id,
 			const LocalIndex data_array_id,
-			const LocalIndex num_values,
-			const DataType** data);
+			const DataType** data,
+			const LocalIndex num_values);
 
 		/// Close the binary file, writes the JSON file, and resets the DataWriter object. 
 		/// Note: this gets call with the destructor, so you don't have to call it unless
@@ -99,17 +99,13 @@ namespace fea_io
 		mesh_info_ = mesh_info;
 		partition_infos_ = partition_info;
 		data_array_infos_ = data_array_infos;
-		write_state_ = WriteState::WritePhase;
 
 		// Update data_array_infos_ offsets and sizes vectors
 		// Compute the size needed for each partition, and save the size required for each partition within
 		// an ordered vector (this means that the partitions will ordered by index within the binary file)
 		std::streamoff curr_pos = 0;
-		for (auto& da_info : data_array_infos_) {
-			da_info.begin_offsets.resize(partition_infos_.size(), 0);
-			da_info.curr_bytes_written.resize(partition_infos_.size(), 0);
-			da_info.num_bytes.resize(partition_infos_.size(), 0);
-		}
+		for (auto& da_info : data_array_infos_)
+			da_info.resize_offsets(partition_infos_.size());
 		for (auto i = 0; i < partition_infos_.size(); i++) {
 			for (auto& da_info : data_array_infos_) {
 				da_info.begin_offsets[i] = curr_pos;
@@ -153,7 +149,7 @@ namespace fea_io
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	template<typename DataType>
-	inline void DataWriter<GlobalIndex, LocalIndex, CoordType>::write(const LocalIndex partition_id, const LocalIndex data_array_id, const LocalIndex num_values, const DataType * data)
+	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::write(const LocalIndex partition_id, const LocalIndex data_array_id, const DataType * data, const LocalIndex num_values)
 	{
 		auto& data_info = data_array_infos_[data_array_id];
 		out_stream_.seekp(data_info.begin_offsets[partition_id] + data_info.curr_bytes_written[partition_id]);
@@ -164,7 +160,7 @@ namespace fea_io
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	template<typename DataType>
-	inline void DataWriter<GlobalIndex, LocalIndex, CoordType>::write(const LocalIndex partition_id, const LocalIndex data_array_id, const LocalIndex num_values, const DataType ** data)
+	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::write(const LocalIndex partition_id, const LocalIndex data_array_id, const DataType ** data, const LocalIndex num_values)
 	{
 		auto& data_info = data_array_infos_[data_array_id];
 		out_stream_.seekp(data_info.begin_offsets[partition_id] + data_info.curr_bytes_written[partition_id]);

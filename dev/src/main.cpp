@@ -6,6 +6,8 @@
 #include "fea_io/common/MPIUtils.h"
 #include "fea_io/data/DataReader.h"
 #include "fea_io/data/DataWriter.h"
+#include "fea_io/group/GroupReader.h"
+#include "fea_io/group/GroupWriter.h"
 #include "fea_io/mesh/MeshParWriter.h"
 #include "fea_io/mesh/MeshReader.h"
 
@@ -275,8 +277,8 @@ bool test_data_writer()
 		auto data1 = get_part1_data();
 
 		for (auto i = 0; i < data0.size(); i++) {
-			writer.write(0, i, static_cast<int16_t>(data0[i].size()) / data_info[i].num_comps, &data0[i][0]);
-			writer.write(1, i, static_cast<int16_t>(data1[i].size()) / data_info[i].num_comps, &data1[i][0]);
+			writer.write(0, i, &data0[i][0], static_cast<int16_t>(data0[i].size()) / data_info[i].num_comps);
+			writer.write(1, i, &data1[i][0], static_cast<int16_t>(data1[i].size()) / data_info[i].num_comps);
 		}
 	}
 
@@ -303,6 +305,63 @@ bool test_data_reader()
 			&& compare_vec(data1_0, data1[0])
 			&& compare_vec(data1_1, data1[1])
 			&& compare_vec(data1_2, data1[2]);
+	}
+
+	return true;
+}
+
+bool test_group_writer()
+{
+	if (MPIUtils::get_local_rank() == 0) {
+		std::vector<ArrayInfo> data_info(1);
+		data_info[0].initialize<float>(
+			0,
+			ArrayType::Node,
+			1,
+			"Foo",
+			{ "f" });
+
+		GroupInfo group_info;
+		group_info.initialize<int16_t>(
+			0,
+			"AGroupOfNodes",
+			GroupType::Node,
+			data_info,
+			{3, 3});
+
+		GroupWriter writer;
+		writer.initialize("test_serial_group", { group_info });
+		
+		std::vector<int16_t> nodes_in_part0 = { 1, 3, 5 };
+		writer.write_list(0, 0, &nodes_in_part0[0]);
+		std::vector<int16_t> nodes_in_part1 = { 0, 2, 4 };
+		writer.write_list(0, 1, &nodes_in_part1[0]);
+
+		std::vector<float> data_in_part0 = { 0, 1, 2 };
+		writer.write(0, 0, 0, &data_in_part0[0], 3);
+		std::vector<float> data_in_part1 = { 0, 1, 2 };
+		writer.write(0, 1, 0, &data_in_part1[0], 3);
+	}
+
+	return true;
+}
+
+bool test_group_reader()
+{
+	if (MPIUtils::get_local_rank() == 0) {
+		GroupReader reader("test_serial_group");
+		std::vector<int16_t> nodes_in_part0; reader.read_list(0, 0, nodes_in_part0);
+		std::vector<int16_t> nodes_in_part1; reader.read_list(0, 1, nodes_in_part1);
+		std::vector<double> data0_0_0; reader.read(0, 0, 0, data0_0_0);
+		std::vector<double> data0_1_0; reader.read(0, 1, 0, data0_1_0);
+
+		std::vector<int16_t> nodes_in_part0_c = { 1, 3, 5 };
+		std::vector<int16_t> nodes_in_part1_c = { 0, 2, 4 };
+		std::vector<float> data_c = { 0, 1, 2 };
+		return compare_vec(nodes_in_part0, nodes_in_part0_c)
+			&& compare_vec(nodes_in_part1, nodes_in_part1_c)
+			&& compare_vec(data0_0_0, data_c)
+			&& compare_vec(data0_1_0, data_c);
 	}
 
 	return true;
@@ -410,6 +469,8 @@ int main(int argc, char **argv)
 	RUN_TEST(test_mesh_reader);
 	RUN_TEST(test_data_writer);
 	RUN_TEST(test_data_reader);
+	RUN_TEST(test_group_writer);
+	RUN_TEST(test_group_reader);
 	
 	/*
 	json j;

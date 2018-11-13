@@ -100,7 +100,7 @@ namespace fea_io
 		else if (lcs_a == LCSAssignment::Component) return "Component";
 		else if (lcs_a == LCSAssignment::Element) return "Element";
 		else if (lcs_a == LCSAssignment::Node) return "Node";
-		else throw _MSG_EXCEPT("LCSAssignment " + std::to_string(static_cast<std::underlying_type<ElementType>::type>(lcs_a)) + " not recognized.");
+		else throw _MSG_EXCEPT("LCSAssignment " + std::to_string(static_cast<std::underlying_type<LCSAssignment>::type>(lcs_a)) + " not recognized.");
 	}
 
 	LCSAssignment assignment_from_name(const std::string& name)

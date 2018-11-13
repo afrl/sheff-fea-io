@@ -31,10 +31,14 @@ namespace fea_io
 		int32_t num_comps;
 		std::string name;
 		std::vector<std::string> comp_names;
-		// The following variables are set by DataWriter::initialize
+		/// The offset of the data for each partition relative to the beginning of the binary file.
+		/// Note: set within DataWriter::initialize or GroupWriter::initialize
 		std::vector<std::streamoff> begin_offsets;
+		/// The number of bytes needed for the data in each partition.
+		/// Note: set within DataWriter::initialize or GroupWriter::initialize
 		std::vector<std::streamoff> num_bytes;
-		// Note: excluded from JSON conversion
+		/// A counter of the number of bytes written for each partition.  Only used for run-time checks.
+		/// Note: excluded from JSON conversion
 		std::vector<std::streamoff> curr_bytes_written;
 
 		ArrayInfo() {};
@@ -62,6 +66,17 @@ namespace fea_io
 			data_type_num_bytes = sizeof(ValueType);
 		}
 
+		void resize_offsets(const int64_t num_partitions) {
+			begin_offsets.resize(num_partitions);
+			std::fill(begin_offsets.begin(), begin_offsets.end(), 0);
+			curr_bytes_written.resize(num_partitions);
+			std::fill(curr_bytes_written.begin(), curr_bytes_written.end(), 0);
+			num_bytes.resize(num_partitions);
+			std::fill(num_bytes.begin(), num_bytes.end(), 0);
+		}
+
+		/// Returns the number of bytes needed for this data array on a single partition
+		/// This version of get_size_needed(...) is called by DataWriter::initialize(...)
 		template<typename PartitionInfo>
 		std::streamoff get_size_needed(const PartitionInfo& pi, const int64_t& total_num_quad_points)
 		{

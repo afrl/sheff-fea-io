@@ -32,7 +32,7 @@ namespace fea_io
 
 		/// Writes an array of a fundamental type to a binary file a the current stream position
 		template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type* = nullptr>
-		static void binary_write(std::ofstream& out, T* arr, int size);
+		static void binary_write(std::ofstream& out, T* arr, const std::streamsize size);
 
 		// Read methods
 
@@ -86,9 +86,9 @@ namespace fea_io
 	}
 
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
-	inline void IOUtils::binary_write(std::ofstream & out, T * arr, int size)
+	inline void IOUtils::binary_write(std::ofstream & out, T * arr, const std::streamsize size)
 	{
-		out.write(reinterpret_cast<const char*>(&arr[0]), static_cast<std::streamsize>(size * sizeof(T)));
+		out.write(reinterpret_cast<const char*>(&arr[0]), size * sizeof(T));
 	}
 
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
