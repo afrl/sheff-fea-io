@@ -24,13 +24,15 @@ namespace fea_io
 	struct ArrayInfo
 	{
 		// Set by constructor
-		int32_t id;
+		std::string name;
 		ArrayType type;
 		ArrayDataType data_type;
 		int32_t data_type_num_bytes;
 		int32_t num_comps;
-		std::string name;
 		std::vector<std::string> comp_names;
+		/// The id of the data array (or index in the vector of ArrayInfo objects)
+		/// Note: set within DataWriter::intialize or GroupWriter::initialize
+		int32_t id;
 		/// The offset of the data for each partition relative to the beginning of the binary file.
 		/// Note: set within DataWriter::initialize or GroupWriter::initialize
 		std::vector<std::streamoff> begin_offsets;
@@ -45,18 +47,17 @@ namespace fea_io
 
 		template<typename ValueType>
 		void initialize(
-			const int32_t id_a,
+			const std::string name_a,
 			const ArrayType type_a,
 			const int32_t num_comps_a,
-			const std::string name_a,
 			const std::vector<std::string> comp_names_a)
 		{
-			id = id_a;
+			name = name_a;
 			type = type_a;
 			num_comps = num_comps_a;
-			name = name_a;
 			comp_names = comp_names_a;
 
+			id = -1;
 			if (std::is_floating_point<ValueType>::value)
 				data_type = ArrayDataType::FloatingPoint;
 			else if (std::is_integral<ValueType>::value)

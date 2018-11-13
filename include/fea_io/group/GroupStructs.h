@@ -33,7 +33,6 @@ namespace fea_io
 
 	struct GroupInfo
 	{
-		int32_t id;
 		std::string name;
 		/// The type of group (node or element)
 		GroupType type;
@@ -41,6 +40,9 @@ namespace fea_io
 		std::vector<ArrayInfo> array_infos;
 		/// The number of bytes that the integral type requres
 		int8_t index_type_num_bytes;
+		/// The id of the data array (or index in the vector of ArrayInfo objects)
+		/// Note: set within GroupWriter::initialize
+		int32_t id;
 		/// The number of nodes/elements in the group.  Note: the size should match
 		/// the total number of partitions in the mesh.  Any partition that does not
 		/// contain a node or element in the group should just have a 0.
@@ -51,18 +53,17 @@ namespace fea_io
 
 		template<typename IndexType>
 		void initialize(
-			const int32_t id_a,
 			const std::string name_a,
 			const GroupType type_a,
 			const std::vector<ArrayInfo>& array_infos_a,
 			const std::vector<int64_t>& num_objects_in_partitions_a)
 		{
-			id = id_a;
 			name = name_a;
 			type = type_a;
 			array_infos = array_infos_a;
 			num_objects_in_partitions = num_objects_in_partitions_a;
 
+			id = -1;
 			if (not std::is_integral<IndexType>::value)
 				throw _MSG_EXCEPT_C("Groups must use integral data types for the indexing, but a non-integral type was provided.");
 			index_type_num_bytes = sizeof(IndexType);

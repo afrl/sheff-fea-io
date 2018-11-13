@@ -35,7 +35,7 @@ namespace fea_io
 			const MeshMetaInfoType mesh_info,
 			const std::vector<PartitionInfoType> partition_info,
 			const std::vector<GlobalIndex> num_quad_points_in_partitions,
-			const std::vector<ArrayInfo> data_array_infos);
+			const std::vector<ArrayInfo> array_infos);
 
 		// Writes value for a single node, element, or quad-point
 		// Note: the order of node/element/quad-point(s) for which this method is
@@ -44,7 +44,7 @@ namespace fea_io
 		template<typename DataType>
 		void write(
 			const LocalIndex partition_id,
-			const LocalIndex data_array_id,
+			const std::string array_name,
 			const DataType* data,
 			const LocalIndex num_values = 1);
 
@@ -52,7 +52,7 @@ namespace fea_io
 		template<typename DataType>
 		void write(
 			const LocalIndex partition_id,
-			const LocalIndex data_array_id,
+			const std::string array_name,
 			const DataType** data,
 			const LocalIndex num_values);
 
@@ -64,7 +64,8 @@ namespace fea_io
 	protected:
 		MeshMetaInfoType mesh_info_;
 		std::vector<PartitionInfoType> partition_infos_;
-		std::vector<ArrayInfo> data_array_infos_;
+		std::vector<ArrayInfo> array_infos_;
+		std::map<std::string, std::size_t> array_name_to_id_map_;
 		WriteState write_state_;
 		std::string file_path_;
 		std::ofstream out_stream_;
@@ -87,7 +88,7 @@ namespace fea_io
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string file_path, const MeshMetaInfoType mesh_info, const std::vector<PartitionInfoType> partition_info, const std::vector<GlobalIndex> num_quad_points_in_partitions, const std::vector<ArrayInfo> data_array_infos)
+	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string file_path, const MeshMetaInfoType mesh_info, const std::vector<PartitionInfoType> partition_info, const std::vector<GlobalIndex> num_quad_points_in_partitions, const std::vector<ArrayInfo> array_infos)
 	{
 		if (write_state_ != WriteState::Uninitialized && write_state_ != WriteState::Finalized)
 			throw _MSG_EXCEPT_C("initialize(...) can only be called after construction or close().");
@@ -98,16 +99,19 @@ namespace fea_io
 		file_path_ = file_path;
 		mesh_info_ = mesh_info;
 		partition_infos_ = partition_info;
-		data_array_infos_ = data_array_infos;
+		array_infos_ = array_infos;
 
-		// Update data_array_infos_ offsets and sizes vectors
+		// Update array_infos_ offsets and sizes vectors
 		// Compute the size needed for each partition, and save the size required for each partition within
 		// an ordered vector (this means that the partitions will ordered by index within the binary file)
 		std::streamoff curr_pos = 0;
-		for (auto& da_info : data_array_infos_)
-			da_info.resize_offsets(partition_infos_.size());
+		for (auto j = 0; j < array_infos_.size(); j++) {
+			array_infos_[j].id = j;
+			array_name_to_id_map_[array_infos_[j].name] = j;
+			array_infos_[j].resize_offsets(partition_infos_.size());
+		}
 		for (auto i = 0; i < partition_infos_.size(); i++) {
-			for (auto& da_info : data_array_infos_) {
+			for (auto& da_info : array_infos_) {
 				da_info.begin_offsets[i] = curr_pos;
 				da_info.num_bytes[i] = da_info.get_size_needed(partition_infos_[i], num_quad_points_in_partitions[i]);
 				curr_pos += da_info.num_bytes[i];
@@ -149,24 +153,32 @@ namespace fea_io
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	template<typename DataType>
-	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::write(const LocalIndex partition_id, const LocalIndex data_array_id, const DataType * data, const LocalIndex num_values)
+	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::write(const LocalIndex partition_id, const std::string array_name, const DataType * data, const LocalIndex num_values)
 	{
-		auto& data_info = data_array_infos_[data_array_id];
-		out_stream_.seekp(data_info.begin_offsets[partition_id] + data_info.curr_bytes_written[partition_id]);
+		auto find_iter = array_name_to_id_map_.find(array_name);
+		if (find_iter == array_name_to_id_map_.end())
+			throw _MSG_EXCEPT_C("Data array " + array_name + " was not found. Be sure to pass all of the arrays when you call DataWriter::initialize(...).");
+
+		auto& array_info = array_infos_[find_iter->second];
+		out_stream_.seekp(array_info.begin_offsets[partition_id] + array_info.curr_bytes_written[partition_id]);
 		for (auto i = 0; i < num_values; i++)
-			IOUtils::binary_write(out_stream_, &data[i*data_info.num_comps], data_info.num_comps);
-		data_info.curr_bytes_written[partition_id] += num_values * data_info.num_comps * sizeof(DataType);
+			IOUtils::binary_write(out_stream_, &data[i*array_info.num_comps], array_info.num_comps);
+		array_info.curr_bytes_written[partition_id] += num_values * array_info.num_comps * sizeof(DataType);
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	template<typename DataType>
-	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::write(const LocalIndex partition_id, const LocalIndex data_array_id, const DataType ** data, const LocalIndex num_values)
+	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::write(const LocalIndex partition_id, const std::string array_name, const DataType ** data, const LocalIndex num_values)
 	{
-		auto& data_info = data_array_infos_[data_array_id];
-		out_stream_.seekp(data_info.begin_offsets[partition_id] + data_info.curr_bytes_written[partition_id]);
+		auto find_iter = array_name_to_id_map_.find(array_name);
+		if (find_iter == array_name_to_id_map_.end())
+			throw _MSG_EXCEPT_C("Data array " + array_name + " was not found. Be sure to pass all of the arrays when you call DataWriter::initialize(...).");
+
+		auto& array_info = array_infos_[find_iter->second];
+		out_stream_.seekp(array_info.begin_offsets[partition_id] + array_info.curr_bytes_written[partition_id]);
 		for (auto i = 0; i < num_values; i++)
-			IOUtils::binary_write(out_stream_, data[i], data_info.num_comps);
-		data_info.curr_bytes_written[partition_id] += num_values * data_info.num_comps * sizeof(DataType);
+			IOUtils::binary_write(out_stream_, data[i], array_info.num_comps);
+		array_info.curr_bytes_written[partition_id] += num_values * array_info.num_comps * sizeof(DataType);
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
@@ -178,7 +190,7 @@ namespace fea_io
 
 		std::ofstream json_component(file_path_ + ".json");
 		json j;
-		j["data_arrays"] = data_array_infos_;
+		j["data_arrays"] = array_infos_;
 		json_component << std::setw(4) << j << std::endl;
 		json_component.close();
 
@@ -188,7 +200,7 @@ namespace fea_io
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	inline void DataWriter<GlobalIndex, LocalIndex, CoordType>::verify_data_sizes() const
 	{
-		for (auto& da_info : data_array_infos_) {
+		for (auto& da_info : array_infos_) {
 			// For any partition written to on this processor, ensure the size written is as expected
 			std::vector<LocalIndex> partition_written_to_for_this_proc;
 			for (auto i = 0; i < partition_infos_.size(); i++) {

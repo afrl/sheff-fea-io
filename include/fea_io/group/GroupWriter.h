@@ -32,11 +32,9 @@ namespace fea_io
 
 		template<typename IndexType>
 		void write_list(
-			const int64_t group_id,
+			const std::string group_name,
 			const int64_t partition_id,
 			const IndexType* object_index_list);
-
-		
 
 		/// Writes data for a single node/element or data for multiple
 		/// nodes/elements with the data arranged as single list of values
@@ -44,9 +42,9 @@ namespace fea_io
 		///       should match the node/element list provided with write_list call.
 		template<typename DataType>
 		void write(
-			const int64_t group_id,
+			const std::string group_name,
 			const int64_t partition_id,
-			const int64_t data_array_id,
+			const std::string array_name,
 			const DataType* data,
 			const int64_t num_values = 1);
 
@@ -56,9 +54,9 @@ namespace fea_io
 		///       should match the node/element list provided with write_list call.
 		template<typename DataType>
 		void write(
-			const int64_t group_id,
+			const std::string group_name,
 			const int64_t partition_id,
-			const int64_t data_array_id,
+			const std::string array_name,
 			const DataType** data,
 			const int64_t num_values);
 
@@ -69,6 +67,8 @@ namespace fea_io
 
 	protected:
 		std::vector<GroupInfo> group_infos_;
+		std::map<std::string, std::size_t> group_name_to_id_map_;
+		std::vector<std::map<std::string, std::size_t>> array_name_to_id_map_;
 		WriteState write_state_;
 		std::string file_path_;
 		std::ofstream out_stream_;
@@ -105,6 +105,16 @@ namespace fea_io
 		group_infos_ = group_infos;
 		const std::size_t num_partitions = group_infos_.front().num_objects_in_partitions.size();
 
+		// Set ids
+		array_name_to_id_map_.resize(group_infos_.size());
+		for (auto i = 0; i < group_infos_.size(); i++) {
+			group_infos_[i].id = i;
+			group_name_to_id_map_[group_infos_[i].name] = i;
+			for (auto j = 0; j < group_infos_.size(); j++) {
+				group_infos_[i].array_infos[j].id = j;
+				array_name_to_id_map_[i][group_infos_[i].array_infos[j].name] = j;
+			}
+		}
 		// Resize the containers for offsets to have the number of partitions
 		for (auto& group_info : group_infos_) {
 			group_info.object_list_offsets.resize(num_partitions);
@@ -160,33 +170,53 @@ namespace fea_io
 	}
 
 	template<typename IndexType>
-	inline void GroupWriter::write_list(const int64_t group_id, const int64_t partition_id, const IndexType* object_index_list)
+	inline void fea_io::GroupWriter::write_list(const std::string group_name, const int64_t partition_id, const IndexType * object_index_list)
 	{
-		GroupInfo& group_info = group_infos_[group_id];
+		auto find_iter = group_name_to_id_map_.find(group_name);
+		if (find_iter == group_name_to_id_map_.end())
+			throw _MSG_EXCEPT_C("Group " + group_name + " does not exist in the list of groups indicated by the JSON file.");
+		GroupInfo& group_info = group_infos_[find_iter->second];
+
 		out_stream_.seekp(group_info.object_list_offsets[partition_id]);
 		IOUtils::binary_write(out_stream_, &object_index_list[0], group_info.num_objects_in_partitions[partition_id]);
 	}
 
 	template<typename DataType>
-	inline void GroupWriter::write(const int64_t group_id, const int64_t partition_id, const int64_t data_array_id, const DataType * data, const int64_t num_values)
+	inline void fea_io::GroupWriter::write(const std::string group_name, const int64_t partition_id, const std::string array_name, const DataType * data, const int64_t num_values)
 	{
-		GroupInfo& group_info = group_infos_[group_id];
-		auto& data_info = group_info.array_infos[data_array_id];
-		out_stream_.seekp(data_info.begin_offsets[partition_id] + data_info.curr_bytes_written[partition_id]);
+		auto find_iter = group_name_to_id_map_.find(group_name);
+		if (find_iter == group_name_to_id_map_.end())
+			throw _MSG_EXCEPT_C("Group " + group_name + " does not exist in the list of groups indicated by the JSON file.");
+		GroupInfo& group_info = group_infos_[find_iter->second];
+
+		auto find_iter2 = array_name_to_id_map_[group_info.id].find(array_name);
+		if (find_iter2 == array_name_to_id_map_[group_info.id].end())
+			throw _MSG_EXCEPT_C("Data array " + array_name + " does not exist in the list of arrays indicated by the JSON file for group " + group_name + ".");
+		auto& array_info = group_info.array_infos[find_iter2->second];
+
+		out_stream_.seekp(array_info.begin_offsets[partition_id] + array_info.curr_bytes_written[partition_id]);
 		for (auto i = 0; i < num_values; i++)
-			IOUtils::binary_write(out_stream_, &data[i*data_info.num_comps], data_info.num_comps);
-		data_info.curr_bytes_written[partition_id] += num_values * data_info.num_comps * sizeof(DataType);
+			IOUtils::binary_write(out_stream_, &data[i*array_info.num_comps], array_info.num_comps);
+		array_info.curr_bytes_written[partition_id] += num_values * array_info.num_comps * sizeof(DataType);
 	}
 
 	template<typename DataType>
-	inline void GroupWriter::write(const int64_t group_id, const int64_t partition_id, const int64_t data_array_id, const DataType ** data, const int64_t num_values)
+	inline void fea_io::GroupWriter::write(const std::string group_name, const int64_t partition_id, const std::string array_name, const DataType ** data, const int64_t num_values)
 	{
-		GroupInfo& group_info = group_infos_[group_id];
-		auto& data_info = group_info.array_infos[data_array_id];
-		out_stream_.seekp(data_info.begin_offsets[partition_id] + data_info.curr_bytes_written[partition_id]);
+		auto find_iter = group_infos_.find(group_name);
+		if (find_iter == group_name_to_id_map_.end())
+			throw _MSG_EXCEPT_C("Group " + group_name + " does not exist in the list of groups indicated by the JSON file.");
+		GroupInfo& group_info = group_infos_[find_iter->second];
+
+		auto find_iter2 = array_name_to_id_map_[group_info.id].find(array_name);
+		if (find_iter2 == array_name_to_id_map_[group_info.id].end())
+			throw _MSG_EXCEPT_C("Data array " + array_name + " does not exist in the list of arrays indicated by the JSON file for group " + group_name + ".");
+		auto& array_info = group_info.array_infos[find_iter2->second];
+
+		out_stream_.seekp(array_info.begin_offsets[partition_id] + array_info.curr_bytes_written[partition_id]);
 		for (auto i = 0; i < num_values; i++)
-			IOUtils::binary_write(out_stream_, data[i], data_info.num_comps);
-		data_info.curr_bytes_written[partition_id] += num_values * data_info.num_comps * sizeof(DataType);
+			IOUtils::binary_write(out_stream_, data[i], array_info.num_comps);
+		array_info.curr_bytes_written[partition_id] += num_values * array_info.num_comps * sizeof(DataType);
 	}
 
 	inline void GroupWriter::close()

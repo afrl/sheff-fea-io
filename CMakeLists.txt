@@ -52,6 +52,7 @@ set(FEA_IO_HEADER_LIST
 	${FEA_IO_INCLUDE_SUB}/data/DataStructs.h
 	${FEA_IO_INCLUDE_SUB}/data/DataWriter.h
 	${FEA_IO_INCLUDE_SUB}/group/GroupReader.h
+	${FEA_IO_INCLUDE_SUB}/group/GroupStructs.h
 	${FEA_IO_INCLUDE_SUB}/group/GroupWriter.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshEnums.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshInfoStructs.h
