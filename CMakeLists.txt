@@ -61,7 +61,8 @@ set(FEA_IO_HEADER_LIST
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshParWriter.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshReader.h
 	${FEA_IO_INCLUDE_SUB}/mesh/MeshStructs.h
-	${FEA_IO_INCLUDE_SUB}/mesh/MeshWriter.h)
+	${FEA_IO_INCLUDE_SUB}/mesh/MeshWriter.h
+	${FEA_IO_INCLUDE_SUB}/meta/MetaReader.h)
 set(FEA_IO_CONFIG_INSTALL_DIR "lib/cmake/${PROJECT_NAME}" CACHE INTERNAL "")
 set(FEA_IO_INCLUDE_INSTALL_DIR "include")
 set(FEA_IO_TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")

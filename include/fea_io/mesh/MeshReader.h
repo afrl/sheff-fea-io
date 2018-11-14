@@ -37,8 +37,8 @@ namespace fea_io
 		std::vector<PartitionInfoType> partition_infos_;
 		DataTypeSizes data_types_in_file;
 		std::ifstream in_stream_;
-		const std::string json_ext = ".g.json";
-		const std::string binary_ext = ".g.bin";
+		const std::string json_ext = ".m.json";
+		const std::string binary_ext = ".m.bin";
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>

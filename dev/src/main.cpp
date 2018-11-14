@@ -367,7 +367,7 @@ bool test_meta_reader()
 {
 	if (MPIUtils::get_local_rank() == 0) {
 		MetaReader reader;
-
+		reader.open("test_meta.x.json");
 	}
 
 	return true;
