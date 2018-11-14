@@ -1,0 +1,40 @@
+cmake_minimum_required(VERSION 2.8.8 FATAL_ERROR)
+
+set(PFEC_ROOT_DIR ../)
+set(COMMON_ROOT_DIR ../../Common)
+set(BETA_DEPEND ../../Dependencies)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ../../Bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ../../Bin)
+
+FIND_PACKAGE(ParaView REQUIRED)
+
+INCLUDE(${PARAVIEW_USE_FILE})
+ADD_PARAVIEW_PLUGIN(PFECReader "1.1" 
+   SERVER_MANAGER_XML PFECReader.xml
+   SERVER_MANAGER_SOURCES vtkPFECReader.cxx 
+   
+   SOURCES ${PFEC_ROOT_DIR}/Source/pfecBaseIO.cpp
+      ${PFEC_ROOT_DIR}/Source/pfecBaseReader.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecBaseWriter.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecDataReader.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecDataWriter.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecDefines.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecException.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecGroupReader.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecGroupWriter.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecMeshReader.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecMeshWriter.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecMetaReader.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecMetaWriter.cpp
+	  ${PFEC_ROOT_DIR}/Source/pfecUtility.cpp
+	  ${COMMON_ROOT_DIR}/math/rotation/Rotation.cpp
+   
+   REQUIRED_ON_SERVER)
+
+INCLUDE_DIRECTORIES(${VTK_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${BETA_DEPEND}/rapidjson/include)
+INCLUDE_DIRECTORIES(${BETA_DEPEND}/eigen)
+INCLUDE_DIRECTORIES(${PFEC_ROOT_DIR}/Source)
+INCLUDE_DIRECTORIES(${COMMON_ROOT_DIR})
+INCLUDE_DIRECTORIES(${COMMON_ROOT_DIR}/math)
+CMAKE_POLICY(SET CMP0023 NEW)

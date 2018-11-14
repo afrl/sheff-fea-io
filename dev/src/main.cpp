@@ -10,6 +10,7 @@
 #include "fea_io/group/GroupWriter.h"
 #include "fea_io/mesh/MeshParWriter.h"
 #include "fea_io/mesh/MeshReader.h"
+#include "fea_io/meta/MetaReader.h"
 
 using json = nlohmann::json;
 using namespace fea_io;
@@ -362,6 +363,16 @@ bool test_group_reader()
 	return true;
 }
 
+bool test_meta_reader()
+{
+	if (MPIUtils::get_local_rank() == 0) {
+		MetaReader reader;
+
+	}
+
+	return true;
+}
+
 void illustrative_serial()
 {
 	// This sets the types to be used for all the variables in the mesh
@@ -466,6 +477,7 @@ int main(int argc, char **argv)
 	RUN_TEST(test_data_reader);
 	RUN_TEST(test_group_writer);
 	RUN_TEST(test_group_reader);
+	RUN_TEST(test_meta_reader);
 	
 	/*
 	json j;

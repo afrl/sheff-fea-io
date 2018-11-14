@@ -6,6 +6,7 @@ cmake_minimum_required(VERSION 3.8)
 
 # Options
 option(FEA_IO_BuildDev "Build the main.cpp in the dev folder. (intended for debugging this project by devs)" ON)
+option(FEA_IO_BuildParaViewReader "Build ParaView reader for the JSON-binary format supported by the fea_io project. (Requires having build ParaView from source)" ON)
 option(FEA_IO_BuildTests "Build the unit tests." ON)
 
 # Guard against in-source builds
@@ -99,6 +100,11 @@ target_link_libraries(${FEA_IO_TARGET_NAME} INTERFACE nlohmann_json::nlohmann_js
 # Build dev
 if(FEA_IO_BuildDev)
 	add_subdirectory(dev)
+endif()
+
+# Build paraview plugin
+if(FEA_IO_BuildParaViewReader)
+	add_subdirectory(paraview_plugin)
 endif()
 
 # Build tests
