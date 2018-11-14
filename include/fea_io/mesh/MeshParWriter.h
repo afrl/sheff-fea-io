@@ -191,7 +191,7 @@ namespace fea_io
 			// to calculate the appropriate offsets.
 			auto all_partition_info = MPIUtils::gather_vectors(Parent::partition_infos_);
 
-			std::ofstream json_component(file_path_ + ".json");
+			std::ofstream json_component(file_path_ + Parent::json_ext);
 			json j;
 			j["meta_info"] = meta_info_;
 			j["partition_info"] = all_partition_info;

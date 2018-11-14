@@ -37,14 +37,15 @@ namespace fea_io
 		std::vector<PartitionInfoType> partition_infos_;
 		DataTypeSizes data_types_in_file;
 		std::ifstream in_stream_;
-		const std::string binary_ext = ".bin";
+		const std::string json_ext = ".g.json";
+		const std::string binary_ext = ".g.bin";
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	inline MeshReader<GlobalIndex, LocalIndex, CoordType>::MeshReader(const std::string file_path)
 	{
 		in_stream_.open(file_path + binary_ext, std::ios::binary | std::fstream::in);
-		std::ifstream json_component(file_path + ".json");
+		std::ifstream json_component(file_path + json_ext);
 		json j;
 		json_component >> j;
 		json_component.close();

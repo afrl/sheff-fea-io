@@ -72,7 +72,8 @@ namespace fea_io
 		WriteState write_state_;
 		std::string file_path_;
 		std::ofstream out_stream_;
-		const std::string binary_ext = ".bin";
+		const std::string json_ext = ".g.json";
+		const std::string binary_ext = ".g.bin";
 
 		void verify_data_sizes() const;
 	};
@@ -225,7 +226,7 @@ namespace fea_io
 
 		verify_data_sizes();
 
-		std::ofstream json_component(file_path_ + ".json");
+		std::ofstream json_component(file_path_ + json_ext);
 		json j;
 		j["groups"] = group_infos_;
 		json_component << std::setw(4) << j << std::endl;

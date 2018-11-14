@@ -90,7 +90,8 @@ namespace fea_io
 		WriteState write_state_;
 		std::string file_path_;
 		std::ofstream out_stream_;
-		const std::string binary_ext = ".bin";
+		const std::string json_ext = ".m.json";
+		const std::string binary_ext = ".m.bin";
 
 		/// The underlying method for writing the mesh partition.  It is called by write_partition
 		/// but it lacks many checks of the data, leaving the checks for write_partition.
@@ -195,7 +196,7 @@ namespace fea_io
 	{
 		out_stream_.close();
 
-		std::ofstream json_component(file_path_ + ".json");
+		std::ofstream json_component(file_path_ + json_ext);
 		json j;
 		j["meta_info"] = meta_info_;
 		j["partition_info"] = partition_infos_;

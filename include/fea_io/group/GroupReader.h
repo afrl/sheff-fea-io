@@ -46,13 +46,14 @@ namespace fea_io
 		std::map<std::string, std::size_t> group_name_to_id_map_;
 		std::vector<std::map<std::string, std::size_t>> array_name_to_id_map_;
 		std::ifstream in_stream_;
-		const std::string binary_ext = ".bin";
+		const std::string json_ext = ".g.json";
+		const std::string binary_ext = ".g.bin";
 	};
 
 	inline GroupReader::GroupReader(const std::string file_path)
 	{
 		in_stream_.open(file_path + binary_ext, std::ios::binary | std::fstream::in);
-		std::ifstream json_component(file_path + ".json");
+		std::ifstream json_component(file_path + json_ext);
 		json j;
 		json_component >> j;
 		json_component.close();
