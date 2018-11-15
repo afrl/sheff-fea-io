@@ -1,7 +1,9 @@
 #pragma once
 
 #include <fstream>
+#include <pair>
 #include <string>
+#include <vector>
 
 #include "fea_io/common/Common.h"
 #include "fea_io/common/Exceptions.h"
@@ -25,6 +27,8 @@ namespace fea_io
 		/// TODO
 		template<typename DataType>
 		void read(const int64_t partition_id, const std::string array_name, std::vector<DataType>& data);
+
+		std::vector<std::pair<std::string, ArrayType>> get_types_of_data_in_file() const;
 
 	private:
 		std::vector<ArrayInfo> array_infos_;
@@ -55,6 +59,14 @@ namespace fea_io
 	inline DataReader::~DataReader()
 	{
 		in_stream_.close();
+	}
+
+	inline std::vector<std::pair<std::string, ArrayType>> DataReader::get_types_of_data_in_file() const
+	{
+		std::vector<std::pair<std::string, ArrayType>> arrays_in_file;
+		for (auto& array_info : array_infos_)
+			arrays_in_file.push_back(std::make_pair(array_info.name, array_info.type));
+		return arrays_in_file;
 	}
 
 	template<typename DataType>
