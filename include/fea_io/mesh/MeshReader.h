@@ -2,6 +2,7 @@
 
 #include <fstream>
 
+#include "fea_io/common/Common.h"
 #include "fea_io/common/Exceptions.h"
 #include "fea_io/common/IOUtils.h"
 
@@ -20,7 +21,7 @@ namespace fea_io
 	class MeshReader
 	{
 	public:
-		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MeshMetaInfoType;
+		typedef MeshInfo<GlobalIndex, LocalIndex, CoordType> MeshInfoType;
 		typedef PartitionInfo<GlobalIndex, LocalIndex, CoordType> PartitionInfoType;
 		typedef Partition<GlobalIndex, LocalIndex, CoordType> PartitionType;
 
@@ -30,11 +31,11 @@ namespace fea_io
 		/// Read a particular partition from the file
 		PartitionType read_partition(const LocalIndex& partition_id);
 
-		const MeshMetaInfoType& get_mesh_info() const { return meta_info_; };
+		const MeshInfoType& get_mesh_info() const { return meta_info_; };
 		const std::vector<PartitionInfoType>& get_partition_info() const { return partition_infos_; };
 
 	private:
-		MeshMetaInfoType meta_info_;
+		MeshInfoType meta_info_;
 		std::vector<PartitionInfoType> partition_infos_;
 		DataTypeSizes data_types_in_file;
 		std::ifstream in_stream_;

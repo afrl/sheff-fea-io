@@ -38,7 +38,7 @@ namespace fea_io
 		}
 	};
 
-	void to_json(json& j, const DataTypeSizes& dti)
+	static void to_json(json& j, const DataTypeSizes& dti)
 	{
 		j = json{ {"global_index_size", dti.global_index_size},
 			{"local_index_size", dti.local_index_size},
@@ -46,7 +46,7 @@ namespace fea_io
 		};
 	}
 
-	void from_json(const json& j, DataTypeSizes& dti)
+	static void from_json(const json& j, DataTypeSizes& dti)
 	{
 		j.at("global_index_size").get_to(dti.global_index_size);
 		j.at("local_index_size").get_to(dti.local_index_size);

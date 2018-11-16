@@ -24,7 +24,7 @@ namespace fea_io
 	class DataWriter
 	{
 	public:
-		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MeshMetaInfoType;
+		typedef MeshInfo<GlobalIndex, LocalIndex, CoordType> MeshInfoType;
 		typedef PartitionInfo<GlobalIndex, LocalIndex, CoordType> PartitionInfoType;
 
 		explicit DataWriter();
@@ -32,7 +32,7 @@ namespace fea_io
 
 		void initialize(
 			const std::string file_path,
-			const MeshMetaInfoType mesh_info,
+			const MeshInfoType mesh_info,
 			const std::vector<PartitionInfoType> partition_info,
 			const std::vector<GlobalIndex> num_quad_points_in_partitions,
 			const std::vector<ArrayInfo> array_infos);
@@ -62,7 +62,7 @@ namespace fea_io
 		void close();
 
 	protected:
-		MeshMetaInfoType mesh_info_;
+		MeshInfoType mesh_info_;
 		std::vector<PartitionInfoType> partition_infos_;
 		std::vector<ArrayInfo> array_infos_;
 		std::map<std::string, std::size_t> array_name_to_id_map_;
@@ -89,7 +89,7 @@ namespace fea_io
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string file_path, const MeshMetaInfoType mesh_info, const std::vector<PartitionInfoType> partition_info, const std::vector<GlobalIndex> num_quad_points_in_partitions, const std::vector<ArrayInfo> array_infos)
+	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string file_path, const MeshInfoType mesh_info, const std::vector<PartitionInfoType> partition_info, const std::vector<GlobalIndex> num_quad_points_in_partitions, const std::vector<ArrayInfo> array_infos)
 	{
 		if (write_state_ != WriteState::Uninitialized && write_state_ != WriteState::Finalized)
 			throw _MSG_EXCEPT_C("initialize(...) can only be called after construction or close().");

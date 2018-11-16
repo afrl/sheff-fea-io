@@ -94,7 +94,7 @@ namespace fea_io
 		Node
 	};
 
-	std::string to_friendly_name(const LCSAssignment& lcs_a)
+	static std::string to_friendly_name(const LCSAssignment& lcs_a)
 	{
 		if (lcs_a == LCSAssignment::None) return "None";
 		else if (lcs_a == LCSAssignment::Component) return "Component";
@@ -103,7 +103,7 @@ namespace fea_io
 		else throw _MSG_EXCEPT("LCSAssignment " + std::to_string(static_cast<std::underlying_type<LCSAssignment>::type>(lcs_a)) + " not recognized.");
 	}
 
-	LCSAssignment assignment_from_name(const std::string& name)
+	static LCSAssignment assignment_from_name(const std::string& name)
 	{
 		if (name == "None") return LCSAssignment::None;
 		else if (name == "Component") return LCSAssignment::Component;
@@ -139,17 +139,23 @@ namespace fea_io
 			throw 0; // TODO throw a real error
 	};
 
-	std::string to_friendly_name(const LCSParameterization& lcs_p)
+	static std::string to_friendly_name(const LCSParameterization& lcs_p)
 	{
 		if (lcs_p == LCSParameterization::Quaternion) return "Quaternion";
 		else if (lcs_p == LCSParameterization::AxisAngle) return "AxisAngle";
 		else throw _MSG_EXCEPT("LCSParameterization " + std::to_string(static_cast<std::underlying_type<ElementType>::type>(lcs_p)) + " not recognized.");
 	}
 
-	LCSParameterization parameterizaiton_from_name(const std::string& name)
+	static LCSParameterization parameterizaiton_from_name(const std::string& name)
 	{
 		if (name == "Quaternion") return LCSParameterization::Quaternion;
 		else if (name == "AxisAngle") return LCSParameterization::AxisAngle;
 		else throw _MSG_EXCEPT("LCSParameterization " + name + " not recognized.");
 	}
+
+	enum class ConnectivityScheme : char
+	{
+		Beta,
+		BSAMcc
+	};
 }

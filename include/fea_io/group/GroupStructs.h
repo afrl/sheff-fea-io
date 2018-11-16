@@ -17,14 +17,14 @@ namespace fea_io
 		Element
 	};
 
-	std::string to_friendly_name(const GroupType& gt)
+	static std::string to_friendly_name(const GroupType& gt)
 	{
 		if (gt == GroupType::Node) return "Node";
 		else if (gt == GroupType::Element) return "Element";
 		else throw _MSG_EXCEPT("GroupType " + std::to_string(static_cast<std::underlying_type<GroupType>::type>(gt)) + " not recognized.");
 	}
 
-	GroupType group_type_from_name(const std::string& name)
+	static GroupType group_type_from_name(const std::string& name)
 	{
 		if (name == "Node") return GroupType::Node;
 		else if (name == "Element") return GroupType::Element;
@@ -70,7 +70,7 @@ namespace fea_io
 		}
 	};
 
-	void to_json(json& j, const GroupInfo& h)
+	static void to_json(json& j, const GroupInfo& h)
 	{
 		j = json{ {"id", h.id},
 			{"name", h.name},
@@ -82,7 +82,7 @@ namespace fea_io
 		};
 	}
 
-	void from_json(const json& j, GroupInfo& h)
+	static void from_json(const json& j, GroupInfo& h)
 	{
 		j.at("id").get_to(h.id);
 		j.at("name").get_to(h.name);

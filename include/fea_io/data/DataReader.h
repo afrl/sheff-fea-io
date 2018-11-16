@@ -1,7 +1,7 @@
 #pragma once
 
 #include <fstream>
-#include <pair>
+#include <utility>
 #include <string>
 #include <vector>
 
@@ -29,6 +29,7 @@ namespace fea_io
 		void read(const int64_t partition_id, const std::string array_name, std::vector<DataType>& data);
 
 		std::vector<std::pair<std::string, ArrayType>> get_types_of_data_in_file() const;
+		auto get_array_infos() const { return array_infos_; };
 
 	private:
 		std::vector<ArrayInfo> array_infos_;

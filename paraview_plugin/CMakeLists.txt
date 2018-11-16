@@ -5,6 +5,11 @@ include(${PARAVIEW_USE_FILE})
 add_paraview_plugin(FEAIOReader "1.0" 
    SERVER_MANAGER_XML FEAIOReader.xml
    SERVER_MANAGER_SOURCES vtkFEAIOReader.cxx 
+
+   SOURCES ConnectivityHelpers.h
+          CoordinateSystemHelpers.h
+	  VTKArrayHelpers.h
+
    REQUIRED_ON_SERVER)
    
 target_link_libraries(FEAIOReader PRIVATE ${FEA_IO_TARGET_NAME})

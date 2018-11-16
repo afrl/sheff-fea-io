@@ -8,9 +8,6 @@
 #include <nlohmann/json.hpp>
 
 #include "fea_io/common/Exceptions.h"
-#include "fea_io/mesh/MeshReader.h"
-#include "fea_io/data/DataReader.h"
-#include "fea_io/group/GroupReader.h"
 
 namespace fea_io
 {
@@ -25,7 +22,7 @@ namespace fea_io
 		std::vector<std::string> group_paths;
 	};
 
-	void to_json(json& j, const IterationInfo& i)
+	static void to_json(json& j, const IterationInfo& i)
 	{
 		j = json{ {"iteration_number", i.iteration_number},
 			{"mesh_path", i.mesh_path}
@@ -36,7 +33,7 @@ namespace fea_io
 			j["group_paths"] = i.group_paths;
 	}
 
-	void from_json(const json& j, IterationInfo& i)
+	static void from_json(const json& j, IterationInfo& i)
 	{
 		j.at("iteration_number").get_to(i.iteration_number);
 		j.at("mesh_path").get_to(i.mesh_path);
@@ -56,7 +53,7 @@ namespace fea_io
 		std::vector<IterationInfo> iterations;
 	};
 
-	void to_json(json& j, const TimeStepInfo& i)
+	static void to_json(json& j, const TimeStepInfo& i)
 	{
 		j = json{ {"time", i.time},
 			{"time_step_id", i.time_step_id},
@@ -70,7 +67,7 @@ namespace fea_io
 			j["iterations"] = i.iterations;
 	}
 
-	void from_json(const json& j, TimeStepInfo& i)
+	static void from_json(const json& j, TimeStepInfo& i)
 	{
 		j.at("time").get_to(i.time);
 		j.at("time_step_id").get_to(i.time_step_id);
@@ -90,7 +87,7 @@ namespace fea_io
 		std::vector<std::string> attributes;
 	};
 
-	void to_json(json& j, const AnalysisMetaInfo& i)
+	static void to_json(json& j, const AnalysisMetaInfo& i)
 	{
 		j = json{ {"name", i.name},
 			{"timesteps", i.timesteps},
@@ -98,7 +95,7 @@ namespace fea_io
 		};
 	}
 
-	void from_json(const json& j, AnalysisMetaInfo& i)
+	static void from_json(const json& j, AnalysisMetaInfo& i)
 	{
 		j.at("name").get_to(i.name);
 		j.at("timesteps").get_to(i.timesteps);

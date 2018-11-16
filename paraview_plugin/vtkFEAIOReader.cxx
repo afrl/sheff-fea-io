@@ -25,7 +25,12 @@
 
 #include "vtkSmartPointer.h"
 
+#include "ConnectivityHelpers.h"
+
 #include "fea_io/common/Exceptions.h"
+#include "fea_io/mesh/MeshReader.h"
+#include "fea_io/data/DataReader.h"
+#include "fea_io/group/GroupReader.h"
 
 #include <algorithm>
 #include <numeric>
@@ -42,69 +47,7 @@ vtkStandardNewMacro(vtkFEAIOReader);
 #define PRINT_DEBUG_STR(str)
 #endif
 
-#define USE_TRY
-
-namespace fea_io_detail
-{
-    auto get_pfec_to_vtk_cell_map() {
-        std::map<fea_io::ElementType, VTKCellType> typeMap;
-        // 2D Elements
-        typeMap[fea_io::ElementType::T2D3N] = VTK_TRIANGLE;
-        typeMap[fea_io::ElementType::Q2D4N] = VTK_QUAD;
-        typeMap[fea_io::ElementType::C2D4N] = VTK_QUAD;
-        typeMap[fea_io::ElementType::T2D6N] = VTK_QUADRATIC_TRIANGLE; // Needs renumbering
-        typeMap[fea_io::ElementType::Q2D8N] = VTK_QUADRATIC_QUAD; // Needs renumbering
-        typeMap[fea_io::ElementType::C2D6N] = VTK_POLYGON; // Needs renumbering
-        // 3D Elements
-        // Linear
-        typeMap[fea_io::ElementType::T3D4N] = VTK_TETRA;
-        typeMap[fea_io::ElementType::P3D5N] = VTK_PYRAMID;
-        typeMap[fea_io::ElementType::W3D6N] = VTK_WEDGE; // Needs renumbering
-        typeMap[fea_io::ElementType::H3D8N] = VTK_HEXAHEDRON;
-        typeMap[fea_io::ElementType::Q3D4N] = VTK_QUAD;
-        typeMap[fea_io::ElementType::C3D8N] = VTK_HEXAHEDRON;
-        // Quadratic
-        typeMap[fea_io::ElementType::T3D10N] = VTK_QUADRATIC_TETRA;
-        typeMap[fea_io::ElementType::P3D13N] = VTK_QUADRATIC_PYRAMID;
-        typeMap[fea_io::ElementType::W3D15N] = VTK_QUADRATIC_WEDGE; // Needs renumbering
-        typeMap[fea_io::ElementType::H3D20N] = VTK_QUADRATIC_HEXAHEDRON; // Needs renumbering
-        typeMap[fea_io::ElementType::Q3D8N] = VTK_QUADRATIC_QUAD;  // Needs renumbering
-        // To to figure out how to handle quadratic cohesive elements
-        //typeMap[fea_io::ElementType::C3D16N] = ;
-        return typeMap;
-    };
-
-    std::vector<vtkIdType> get_pfec_to_vtk_reordering(const fea_io::ElementType &geomType, const std::vector<vtkIdType> &pfecNodeIndices) {
-        std::vector<vtkIdType> vtkNodeIndices(pfecNodeIndices.begin(), pfecNodeIndices.end());
-        // 2D reorders
-        if (geomType == fea_io::ElementType::T2D6N) {
-            int VTKMap_2_2[] = { 0,2,4,1,3,5 };
-            for (unsigned int i = 0; i < pfecNodeIndices.size(); i++) vtkNodeIndices[i] = pfecNodeIndices[VTKMap_2_2[i]];
-        }
-        else if (geomType == fea_io::ElementType::Q2D8N || geomType == fea_io::ElementType::Q3D8N) {
-            int VTKMap_2_3[] = { 0,2,4,6,1,3,5,7 };
-            for (unsigned int i = 0; i < pfecNodeIndices.size(); i++) vtkNodeIndices[i] = pfecNodeIndices[VTKMap_2_3[i]];
-        }
-        else if (geomType == fea_io::ElementType::C2D6N) {
-            int VTKMapCZ_2_6[] = { 0, 1, 2, 5, 4, 3 };
-            for (unsigned int i = 0; i < pfecNodeIndices.size(); i++) vtkNodeIndices[i] = pfecNodeIndices[VTKMapCZ_2_6[i]];
-        }
-        // 3D reorders
-        else if (geomType == fea_io::ElementType::W3D6N) {
-            int VTKMap_3_6[] = { 0, 2, 1, 3, 5, 4 };
-            for (unsigned int i = 0; i < pfecNodeIndices.size(); i++) vtkNodeIndices[i] = pfecNodeIndices[VTKMap_3_6[i]];
-        }
-		else if (geomType == fea_io::ElementType::W3D15N) {
-			int VTKMap_3_15[] = { 0, 4, 2, 9, 13, 11, 5, 3, 1, 14, 12, 10, 6, 8, 7 };
-			for (unsigned int i = 0; i < pfecNodeIndices.size(); i++) vtkNodeIndices[i] = pfecNodeIndices[VTKMap_3_15[i]];
-		}
-        else if (geomType == fea_io::ElementType::H3D20N) {
-            int VTKMap_3_20[] = { 0, 2, 4, 6, 12, 14, 16, 18, 1, 3, 5, 7, 13, 15, 17, 19, 8, 9, 10, 11 };
-            for (unsigned int i = 0; i < pfecNodeIndices.size(); i++) vtkNodeIndices[i] = pfecNodeIndices[VTKMap_3_20[i]];
-        }
-		return vtkNodeIndices;
-    }
-};
+//#define USE_TRY
 
 void vtkFEAIOReader::PrintSelf(ostream & os, vtkIndent indent)
 {
@@ -124,7 +67,7 @@ const char * vtkFEAIOReader::GetPartitionArrayName(int PartitionIndex)
 int vtkFEAIOReader::GetNumberOfPartitionArrays()
 {
 	ReadMetaInformation();
-	return this->PartitionNames.size();
+	return static_cast<int>(this->PartitionNames.size());
 }
 
 int vtkFEAIOReader::GetPartitionArrayStatus(char * PartitionName)
@@ -159,7 +102,7 @@ const char * vtkFEAIOReader::GetComponentArrayName(int ComponentIndex)
 int vtkFEAIOReader::GetNumberOfComponentArrays()
 {
 	ReadMetaInformation();
-	return this->ComponentNames.size();
+	return static_cast<int>(this->ComponentNames.size());
 }
 
 int vtkFEAIOReader::GetComponentArrayStatus(char * ComponentName)
@@ -194,7 +137,7 @@ const char * vtkFEAIOReader::GetPointArrayName(int PointArrayIndex)
 int vtkFEAIOReader::GetNumberOfPointArrays()
 {
 	ReadMetaInformation();
-	return this->PointArrayNames.size();
+	return static_cast<int>(this->PointArrayNames.size());
 }
 
 int vtkFEAIOReader::GetPointArrayStatus(char * PointArrayName)
@@ -230,7 +173,7 @@ const char * vtkFEAIOReader::GetCellArrayName(int CellArrayIndex)
 int vtkFEAIOReader::GetNumberOfCellArrays()
 {
 	ReadMetaInformation();
-	return this->CellArrayNames.size();
+	return static_cast<int>(this->CellArrayNames.size());
 }
 
 int vtkFEAIOReader::GetCellArrayStatus(char * CellArrayName)
@@ -279,7 +222,7 @@ int vtkFEAIOReader::RequestInformation(
 	// Tell ParaView what time steps are availble if there are multiple
 	if (TimestepValues.size() > 1) {
 		double timeRange[2] = { TimestepValues.front() , TimestepValues.back() };
-		outInfo->Set(vtkStreamingDemandDrivenPipeline::TIME_STEPS(), &this->TimestepValues[0], TimestepValues.size());
+		outInfo->Set(vtkStreamingDemandDrivenPipeline::TIME_STEPS(), &this->TimestepValues[0], static_cast<int>(TimestepValues.size()));
 		PRINT_DEBUG_STR("Set number of time steps to " + std::to_string(TimestepValues.size()));
 		outInfo->Set(vtkStreamingDemandDrivenPipeline::TIME_RANGE(), timeRange, 2);
 		PRINT_DEBUG_STR("Set time range " + std::to_string(timeRange[0]) + " to " + std::to_string(timeRange[1]));
@@ -307,7 +250,7 @@ int vtkFEAIOReader::RequestData(
 		return 1;
 	}
 
-    // get the info object
+    // Get the info object
     vtkSmartPointer<vtkInformation> outInfo = outputVector->GetInformationObject(0);
 	this->UpdateMyPartitions(outInfo);
 	this->UpdateComponents();
@@ -318,15 +261,15 @@ int vtkFEAIOReader::RequestData(
 	for (auto i : this->SelectedPointArrays)
 		PRINT_DEBUG_STR(i);
 
-    // get the output
+    // Get the output
     vtkSmartPointer<vtkMultiBlockDataSet> output =
         vtkMultiBlockDataSet::SafeDownCast(outInfo->Get(vtkMultiBlockDataSet::DATA_OBJECT()));
-	// Loop over the partitions and read the material group information then the mesh information
-	// to create the blocks of unstructured grids
+
+	// Loop over the partitions and read the subcomponents to create the blocks of unstructured grids
 	// The tree organization:
-	// MultiBlockRoot (each block represents a domain or continuous material region)
+	// MultiBlockRoot (each block represents a component or continuous material region)
 	// |                          \
-    // Block0 (domain0)   ...   BlockN (domainN)
+    // Block0 (component0)   ...   BlockN (componentN)
 	// MulitPiece0 (in Block0)     MulitPieceN (in BlockN)  (each multipiece data set represents the partitions for the domain)
 	// |                      \
     // Piece0 (partition0) ...  PieceN (partitionN)
@@ -336,7 +279,7 @@ int vtkFEAIOReader::RequestData(
 	for (auto domainID : this->ComponentsNeeded)
 	{
 		vtkSmartPointer<vtkMultiBlockDataSet> domainMultiBlock = vtkSmartPointer<vtkMultiBlockDataSet>::New();
-		domainMultiBlock->SetNumberOfBlocks(this->AllPartitionsNeeded.size());
+		domainMultiBlock->SetNumberOfBlocks(static_cast<int>(this->AllPartitionsNeeded.size()));
 		output->SetBlock(domainBlockID, domainMultiBlock);
 		std::string  domainBlockName = "Component " + std::to_string(domainID);
 		output->GetMetaData(domainBlockID)->Set(vtkCompositeDataSet::NAME(), domainBlockName.c_str());
@@ -344,102 +287,84 @@ int vtkFEAIOReader::RequestData(
 	}
 
     // Get the time ID closet to the time requested
-	unsigned int timeID = UpdateTime(outInfo, output);
+	double time = UpdateTime(outInfo, output);
 
-	/* TODO update
 #ifdef USE_TRY
     try {
 #endif
 
         // Read the meta file and get the mesh for the current timestep
-        PFECNativeInterface::MetaReader metaReader;
-        metaReader.read_meta_file(std::string(FileName));
+		fea_io::MetaReader metaReader;
+		metaReader.open(std::string(FileName));
 
         // Get the mesh for the current time step
 		// TODO use TimeDependentMesh boolean to know if we need to load a new mesh or if we can use the old one.
-        auto meshReaderPtr = metaReader.get_mesh_reader(timeID);
-		if (meshReaderPtr == 0) {
-			vtkErrorMacro("There was no mesh file for the time step requested.");
-			return 1;
+		auto meshPath = metaReader.get_mesh_path_at_t(time);
+		fea_io::MeshReader<IndexType, IndexType, CoordType> meshReader(meshPath);
+		auto meshInfo = meshReader.get_mesh_info();
+		
+		// Get the types of arrays in all the data files for this time step and organize the types of data
+		auto dataPaths = metaReader.get_data_paths_at_t(time);
+		std::vector<std::unique_ptr<fea_io::DataReader>> dataReaderPtrs;
+		std::vector<ArrayReaderPair> arrayReaders;
+		for (auto& path : dataPaths) {
+			dataReaderPtrs.push_back(std::make_unique<fea_io::DataReader>(path));
+			auto& dataReader = *dataReaderPtrs.back();
+			auto arrayInfos = dataReader.get_array_infos();
+			for (auto arrayInfo : arrayInfos) {
+				if (this->SelectedPointArrays.find(arrayInfo.name) != this->SelectedPointArrays.end()) {
+					// Point data that does not need averaging
+					if (arrayInfo.type == fea_io::ArrayType::Node || arrayInfo.type == fea_io::ArrayType::NodeByComponent)
+						arrayReaders.push_back({
+								arrayInfo,
+								ArrayToVTKCategory::Point,
+								&dataReader
+							});
+					// Point data that needs averaging, which need to be within domains
+					else if (arrayInfo.type == fea_io::ArrayType::NodeByElement)
+						arrayReaders.push_back({
+								arrayInfo,
+								ArrayToVTKCategory::PointAveraged,
+								&dataReader
+							});
+				}
+				if (this->SelectedCellArrays.find(arrayInfo.name) != this->SelectedCellArrays.end()) {
+					// Cell data that does not need averaging
+					if (arrayInfo.type == fea_io::ArrayType::Element)
+						arrayReaders.push_back({
+								arrayInfo,
+								ArrayToVTKCategory::Cell,
+								&dataReader
+							});
+					// Cell data that needs averaging
+					else if (arrayInfo.type == fea_io::ArrayType::QuadPointByElement)
+						arrayReaders.push_back({
+								arrayInfo,
+								ArrayToVTKCategory::CellAveraged,
+								&dataReader
+							});
+				}
+			}
 		}
-
-		// Get the data reader if it exists
-		auto dataReaderPtr = metaReader.get_data_reader(timeID);
-		std::vector<PFECNativeInterface::DataMetaData> dataMeta;
-		if (dataReaderPtr) dataMeta = dataReaderPtr->get_data_info();
-		// Organize the types of data
-		std::vector<unsigned int> pointDataInds;
-		std::vector<unsigned int> cellDataInds;
-		std::vector<unsigned int> pointDataWithAvgInds;
-		// Point data that does not need averaging
-		for (auto i = 0; i < dataMeta.size(); i++)
-			if (dataMeta[i].type == PFECNativeInterface::DataType::Nodal
-				&& this->SelectedPointArrays.find(dataMeta[i].name) != this->SelectedPointArrays.end())
-				pointDataInds.push_back(i);
-		// Cell data
-		for (auto i = 0; i < dataMeta.size(); i++)
-			if (dataMeta[i].type == PFECNativeInterface::DataType::Element
-				&& this->SelectedPointArrays.find(dataMeta[i].name) != this->SelectedCellArrays.end())
-				cellDataInds.push_back(i);
-		// Point data that needs averaging, which need to be within domains
-		for (auto i = 0; i < dataMeta.size(); i++)
-			if (dataMeta[i].type == PFECNativeInterface::DataType::NodalByElement
-				&& this->SelectedPointArrays.find(dataMeta[i].name) != this->SelectedPointArrays.end())
-				pointDataWithAvgInds.push_back(i);
-
-		// Get orientation reader
-		auto orientReaderPtr = metaReader.get_orient_reader(timeID);
 
 		// Read what group files exist (Need to finish group implementation)
 		//auto groupFilePaths = metaReader.get_group_file_paths(timeID);
 
-		// Though the structure has the domains at the top and then partitions, we will
+		// Though the structure has the components at the top and then partitions, we will
 		// loop over partitions then domains for more efficient I/O
 		for (auto partitionIndex : this->MyPartitionIndices)
 		{
 			auto partID = this->AllPartitionsNeeded[partitionIndex];
 
 			// Read the mesh
-			// Get the size of this mesh partition
-			PFECNativeInterface::PFEC_INT numNodesInPart = 0;
-			PFECNativeInterface::PFEC_INT numElementsInPart = 0;
-			PFECNativeInterface::PFEC_INT numDimensionsInPart = 0;
-			meshReaderPtr->get_part_sizes(partID, numNodesInPart, numElementsInPart, numDimensionsInPart);
+			auto partition = meshReader.read_partition(partID);
 
-			// Read nodes
-			auto nodeInfo = meshReaderPtr->read_part_nodal(partID);
-			// Read elements
-			auto elementInfo = meshReaderPtr->read_part_element(partID);
-
-			// Test for a special case (the there is one domain in the partition and the data is all nodal or element types)
-			// since we can save a lot of time for the special case.
-			bool allCellsInSameComponent = true;
-			auto domainOfFirstCell = elementInfo.domains.size() > 0 ? elementInfo.domains[0] : 0;
-			for (const auto& d : elementInfo.domains) {
-				if (d != domainOfFirstCell) {
-					allCellsInSameComponent = false;
-					break;
-				}
-			}
-
-			// Create the block(s) of meshes with data
-			if (allCellsInSameComponent && pointDataWithAvgInds.empty()) {
-				PRINT_DEBUG_STR("Using specialized method for flattended data.");
-				CreateBlockForPartitionWithSingleComponent(output,
-					nodeInfo, elementInfo,
-					partitionIndex, partID,
-					orientReaderPtr, dataReaderPtr,
-					dataMeta, pointDataInds, cellDataInds,
-					pointDataWithAvgInds);
-			}
-			else {
-				CreateBlocksForPartitionByComponent(output,
-					nodeInfo, elementInfo,
-					partitionIndex, partID,
-					orientReaderPtr, dataReaderPtr,
-					dataMeta, pointDataInds, cellDataInds,
-					pointDataWithAvgInds);
-			}
+			// This is the main method that creates a mesh with data for each subcomponent
+			// in this partition.
+			CreateBlocksForPartitionByComponent(output,
+				meshInfo,
+				partition,
+				arrayReaders);
         } // End loop over partitions
 
 #ifdef USE_TRY
@@ -457,7 +382,7 @@ int vtkFEAIOReader::RequestData(
         return 1;
     }
 #endif
-*/
+
     return 1;
 }
 
@@ -559,8 +484,8 @@ void vtkFEAIOReader::UpdateMyPartitions(vtkSmartPointer<vtkInformation>& outInfo
 		this->AllPartitionsNeeded.push_back(atoi(partIDStr.c_str()));
 
 	this->MyPartitionIndices.clear();
-	int nominalPartsPerPiece = this->AllPartitionsNeeded.size() / numberOfPieces;
-	int remainingNumParts = this->AllPartitionsNeeded.size() % numberOfPieces;
+	int nominalPartsPerPiece = static_cast<int>(this->AllPartitionsNeeded.size()) / numberOfPieces;
+	int remainingNumParts = static_cast<int>(this->AllPartitionsNeeded.size()) % numberOfPieces;
 	int myStartPiece = nominalPartsPerPiece * piece + (piece < remainingNumParts ? piece : remainingNumParts);
 	int myEndPiece = myStartPiece + nominalPartsPerPiece + (piece < remainingNumParts ? 1 : 0) - 1;
 	for (auto i = myStartPiece; i <= myEndPiece; i++) this->MyPartitionIndices.push_back(i);
@@ -580,7 +505,7 @@ void vtkFEAIOReader::UpdateComponents()
 	}
 }
 
-unsigned int vtkFEAIOReader::UpdateTime(vtkSmartPointer<vtkInformation>& outInfo, vtkSmartPointer<vtkMultiBlockDataSet>& output)
+double vtkFEAIOReader::UpdateTime(vtkSmartPointer<vtkInformation>& outInfo, vtkSmartPointer<vtkMultiBlockDataSet>& output)
 {
 	if (outInfo->Has(vtkStreamingDemandDrivenPipeline::UPDATE_TIME_STEP())) {
 		// Get the requested time step (only supports a single time step)
@@ -597,33 +522,36 @@ unsigned int vtkFEAIOReader::UpdateTime(vtkSmartPointer<vtkInformation>& outInfo
 			}
 		}
 		output->GetInformation()->Set(vtkDataObject::DATA_TIME_STEP(), requestedTime);
-		const auto closestTimeID = TimeToIDMap[closestTime];
-		PRINT_DEBUG_STR("Requested time: " + std::to_string(requestedTime) + " gave timeID " + std::to_string(closestTimeID));
-		return closestTimeID;
+		PRINT_DEBUG_STR("Requested time: " + std::to_string(requestedTime) + " gave time in data of " + std::to_string(closestTime));
+		return closestTime;
 	}
 	return 0;
 }
 
 void vtkFEAIOReader::CreateVTKMesh(
+	const fea_io::MeshInfo<IndexType, IndexType, CoordType>& meshInfo,
 	const fea_io::Partition<IndexType, IndexType, CoordType> &currPartition,
+	const IndexType subcomponentIndex,
 	vtkSmartPointer<vtkUnstructuredGrid>& mesh)
 {
+	auto& subcomponent = currPartition.subcomponents[subcomponentIndex];
+	const IndexType numPoints = static_cast<IndexType>(subcomponent.nodes_in_subcomponent.size());
+	const IndexType numCells = static_cast<IndexType>(subcomponent.elements_in_subcomponent.size());
+
 	// Create points and preallocate
 	vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
-	points->Allocate(localNodeIndicesUsed.size());
+	points->Allocate(currPartition.node_global_ids.size());
 	mesh->SetPoints(points);
-	mesh->Allocate(localElementIndicesUsed.size());
+	mesh->Allocate(currPartition.element_global_ids.size());
 
-	// Get conversions from PFEC to VTK (cell type)
-	auto cellTypeMap = pfecDetail::get_pfec_to_vtk_cell_map();
+	// Get conversions to VTK (cell type)
+	auto cellTypeMap = fea_io::get_to_vtk_cell_map(meshInfo.connectivity_scheme);
 
 	// Create the points
-	for (auto vtkPointNumber = 0; vtkPointNumber < localNodeIndicesUsed.size(); vtkPointNumber++)
-	{
-		auto localNodeIndex = localNodeIndicesUsed[vtkPointNumber];
-
-		const std::vector<double>& coords = nodeInfo.coords[localNodeIndex];
-		points->InsertNextPoint(coords[0], (coords.size() > 1 ? coords[1] : 0.0), (coords.size() > 2 ? coords[2] : 0.0));
+	for (auto vtkPointNumber = 0; vtkPointNumber < numPoints; vtkPointNumber++) {
+		const IndexType indexInPartition = subcomponent.nodes_in_subcomponent[vtkPointNumber];
+		const double* coords = &currPartition.node_coords[meshInfo.dimensionality * indexInPartition];
+		points->InsertNextPoint(coords[0], (meshInfo.dimensionality > 1 ? coords[1] : 0.0), (meshInfo.dimensionality > 2 ? coords[2] : 0.0));
 	}
 
 	// Create point ghost information
@@ -633,49 +561,45 @@ void vtkFEAIOReader::CreateVTKMesh(
 	if (!pointGhostArray) {
 		pointGhostArray.TakeReference(vtkUnsignedCharArray::New());
 		pointGhostArray->SetName(vtkDataSetAttributes::GhostArrayName());
-		pointGhostArray->SetNumberOfTuples(localNodeIndicesUsed.size());
+		pointGhostArray->SetNumberOfTuples(numPoints);
 		pointGhostArray->FillValue(0);
 		mesh->GetPointData()->AddArray(pointGhostArray);
 	}
-	for (auto vtkPointNumber = 0; vtkPointNumber < localNodeIndicesUsed.size(); vtkPointNumber++)
+	for (auto vtkPointNumber = 0; vtkPointNumber < numPoints; vtkPointNumber++)
 	{
-		auto localNodeIndex = localNodeIndicesUsed[vtkPointNumber];
+		const IndexType indexInPartition = subcomponent.nodes_in_subcomponent[vtkPointNumber];
 		// If the node is not owned by the current partition, then flag it as a duplicate ghost point
-		if (currPartition != nodeInfo.partitions[localNodeIndex])
+		if (currPartition.partition_id != currPartition.node_parent_partitions[indexInPartition])
 			pointGhostArray->SetValue(vtkPointNumber, pointGhostArray->GetValue(vtkPointNumber) | vtkDataSetAttributes::DUPLICATEPOINT);
 	}
 
+	// Create a map from the partition numbering to the subcomponent numbering
+	std::map<IndexType, IndexType> partToSubcompNodeMap;
+	for (auto i = 0; i < numPoints; i++)
+		partToSubcompNodeMap[subcomponent.nodes_in_subcomponent[i]] = i;
 
 	// Create the cells
-	for (auto vtkElementNumber = 0; vtkElementNumber < localElementIndicesUsed.size(); vtkElementNumber++)
+	for (auto vtkElementNumber = 0; vtkElementNumber < numCells; vtkElementNumber++)
 	{
-		// This is the index corresponding to elementInfo
-		auto localElementIndex = localElementIndicesUsed[vtkElementNumber];
+		const IndexType indexInPartition = subcomponent.elements_in_subcomponent[vtkElementNumber];
 
 		// Get connectivity
 		unsigned int idIndex = 0;
-		std::vector<vtkIdType> ids(elementInfo.localConnectivity[localElementIndex].size());
-		// If a map is empty, then assume the mapping is the same (0 to 0, 1 to 1, etc.)
-		if (nodeOldLocalToNewLocalMap.empty()) {
-			for (const unsigned int localNodeNumber : elementInfo.localConnectivity[localElementIndex]) {
-				ids[idIndex] = localNodeNumber;
-				idIndex++;
-			}
-		}
-		else {
-			for (const unsigned int localNodeNumber : elementInfo.localConnectivity[localElementIndex]){
-				ids[idIndex] = nodeOldLocalToNewLocalMap.find(localNodeNumber)->second;
-				idIndex++;
-			}
+		const auto& conn = currPartition.element_connectivities[indexInPartition];
+		std::vector<vtkIdType> ids(conn.size());
+		// Convert the connectivity to be relative to the subcomponent numbering
+		for (const unsigned int partitionNodeNumber : conn) {
+			ids[idIndex] = partToSubcompNodeMap[partitionNodeNumber];
+			idIndex++;
 		}
 
 		// Insert a new VTK cell
-		auto const pfecGeomType = elementInfo.elemGeomTypes[localElementIndex];
-		auto ctIterator = cellTypeMap.find(pfecGeomType);
+		auto const elemType = currPartition.element_types[indexInPartition];
+		auto ctIterator = cellTypeMap.find(elemType);
 		if (ctIterator == cellTypeMap.end())
-			vtkErrorMacro("Element " + std::to_string(localElementIndex) + " (local pfec index) with type " + std::to_string(pfecGeomType) + " could not be converted to a VTK type.");
+			vtkErrorMacro(<< "Element " + std::to_string(indexInPartition) + " (partition index) with type " << static_cast<char>(elemType) << " could not be converted to a VTK type.");
 		VTKCellType ct = ctIterator->second;
-		std::vector<vtkIdType> idsReordered = pfecDetail::get_pfec_to_vtk_reordering(pfecGeomType, ids);
+		std::vector<vtkIdType> idsReordered = fea_io::get_to_vtk_reordering(meshInfo.connectivity_scheme, elemType, ids);
 		if (idsReordered.size() == 0) vtkErrorMacro("VTK mapping not found.");
 		mesh->InsertNextCell(ct, idsReordered.size(), &(idsReordered[0]));
 	}
@@ -687,22 +611,22 @@ void vtkFEAIOReader::CreateVTKMesh(
 	if (!cellGhostArray) {
 		cellGhostArray.TakeReference(vtkUnsignedCharArray::New());
 		cellGhostArray->SetName(vtkDataSetAttributes::GhostArrayName());
-		cellGhostArray->SetNumberOfTuples(localElementIndicesUsed.size());
+		cellGhostArray->SetNumberOfTuples(numCells);
 		cellGhostArray->FillValue(0);
 		mesh->GetCellData()->AddArray(cellGhostArray);
 	}
-	for (auto vtkElementNumber = 0; vtkElementNumber < localElementIndicesUsed.size(); vtkElementNumber++)
+	for (auto vtkElementNumber = 0; vtkElementNumber < numCells; vtkElementNumber++)
 	{
-		// This is the index corresponding to elementInfo
-		auto localElementIndex = localElementIndicesUsed[vtkElementNumber];
+		const IndexType indexInPartition = subcomponent.elements_in_subcomponent[vtkElementNumber];
 		// If the cell is not owned by the current partition, then flag it as a duplicate ghost cell
-		if (currPartition != elementInfo.partitions[localElementIndex])
+		if (currPartition.partition_id != currPartition.element_parent_partitions[indexInPartition])
 			cellGhostArray->SetValue(vtkElementNumber, cellGhostArray->GetValue(vtkElementNumber) | vtkDataSetAttributes::DUPLICATECELL);
 	}
 }
 
-inline void vtkFEAIOReader::CreateBlocksForPartitionByComponent(vtkSmartPointer<vtkMultiBlockDataSet>& output, const PFECNativeInterface::NodeInfo & nodeInfo, const PFECNativeInterface::ElementInfo & elementInfo, const int partitionIndex, const PFECNativeInterface::PFEC_INT partID, const std::unique_ptr<PFECNativeInterface::DataReader>& orientReaderPtr, const std::unique_ptr<PFECNativeInterface::DataReader>& dataReaderPtr, const std::vector<PFECNativeInterface::DataMetaData> dataMeta, const std::vector<unsigned int> pointDataInds, const std::vector<unsigned int> cellDataInds, const std::vector<unsigned int> pointDataWithAvgInds)
+void vtkFEAIOReader::CreateBlocksForPartitionByComponent(vtkSmartPointer<vtkMultiBlockDataSet>& output, const fea_io::MeshInfo<IndexType, IndexType, CoordType>& meshInfo, const fea_io::Partition<IndexType, IndexType, CoordType>& currPartition, const std::vector<ArrayReaderPair>& arrayPairs)
 {
+	/* TODO update
 	// Orientation data
 	std::vector< std::vector< std::array<double, 4> > > orientData;
 	if (orientReaderPtr != nullptr)
@@ -857,5 +781,6 @@ inline void vtkFEAIOReader::CreateBlocksForPartitionByComponent(vtkSmartPointer<
 	} // End loop over domains
 	nodalData.clear();
 	cellData.clear();
+	*/
 }
 

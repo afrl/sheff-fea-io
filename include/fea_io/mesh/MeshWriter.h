@@ -32,7 +32,7 @@ namespace fea_io
 	class MeshWriter
 	{
 	public:
-		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MeshMetaInfoType;
+		typedef MeshInfo<GlobalIndex, LocalIndex, CoordType> MeshInfoType;
 		typedef PartitionInfo<GlobalIndex, LocalIndex, CoordType> PartitionInfoType;
 		typedef Partition<GlobalIndex, LocalIndex, CoordType> PartitionType;
 
@@ -59,7 +59,7 @@ namespace fea_io
 
 		void initialize(
 			const std::string file_path,
-			const MeshMetaInfoType meta_info);
+			const MeshInfoType meta_info);
 
 		/// Write the mesh if there is only one partition (will assume it is partition 0 under the hood).
 		void write(
@@ -85,7 +85,7 @@ namespace fea_io
 		virtual void close();
 
 	protected:
-		MeshMetaInfoType meta_info_;
+		MeshInfoType meta_info_;
 		std::vector<PartitionInfoType> partition_infos_;
 		WriteState write_state_;
 		std::string file_path_;
@@ -148,7 +148,7 @@ namespace fea_io
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string file_path, const MeshMetaInfoType meta_info)
+	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string file_path, const MeshInfoType meta_info)
 	{
 		if (write_state_ != WriteState::Uninitialized && write_state_ != WriteState::Finalized)
 			throw _MSG_EXCEPT_C("initialize(...) can only be called after construction or close().");

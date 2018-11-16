@@ -100,7 +100,7 @@ namespace fea_io
 		}
 	};
 
-	void to_json(json& j, const ArrayInfo& ss)
+	static void to_json(json& j, const ArrayInfo& ss)
 	{
 		j = json{ {"id", ss.id},
 			{"type", ss.type},
@@ -114,7 +114,7 @@ namespace fea_io
 		};
 	}
 
-	void from_json(const json& j, ArrayInfo& ss)
+	static void from_json(const json& j, ArrayInfo& ss)
 	{
 		j.at("id").get_to(ss.id);
 		j.at("type").get_to(ss.type);

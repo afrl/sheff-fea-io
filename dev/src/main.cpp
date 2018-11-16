@@ -112,7 +112,7 @@ std::vector<std::vector<float>> get_part1_data()
 	return data;
 }
 
-void get_test_info(MeshMetaInfo<int16_t, int16_t, float>& meta_info, std::vector<PartitionInfo<int16_t, int16_t, float>>& partitions)
+void get_test_info(MeshInfo<int16_t, int16_t, float>& meta_info, std::vector<PartitionInfo<int16_t, int16_t, float>>& partitions)
 {
 	meta_info = {
 		9,
@@ -197,7 +197,7 @@ auto get_part1()
 bool test_mesh_writer_serial()
 {
 	if (MPIUtils::get_local_rank() == 0) {
-		MeshMetaInfo<int16_t, int16_t, float> meta_info;
+		MeshInfo<int16_t, int16_t, float> meta_info;
 		std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
 		get_test_info(meta_info, all_partitions);
 
@@ -213,7 +213,7 @@ bool test_mesh_writer_serial()
 
 bool test_mesh_writer_parallel()
 {
-	MeshMetaInfo<int16_t, int16_t, float> meta_info;
+	MeshInfo<int16_t, int16_t, float> meta_info;
 	std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
 	get_test_info(meta_info, all_partitions);
 
@@ -263,7 +263,7 @@ bool test_mesh_reader()
 bool test_data_writer()
 {
 	if (MPIUtils::get_local_rank() == 0) {
-		MeshMetaInfo<int16_t, int16_t, float> meta_info;
+		MeshInfo<int16_t, int16_t, float> meta_info;
 		std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
 		get_test_info(meta_info, all_partitions);
 		auto data_info = get_test_data_info<float>();
@@ -488,7 +488,7 @@ int main(int argc, char **argv)
 	std::cout << std::setw(4) << j << std::endl;
 
 	// Test conversions
-	MeshMetaInfo<int16_t, int16_t, double> meta_info_check = j["meta_info"];
+	MeshInfo<int16_t, int16_t, double> meta_info_check = j["meta_info"];
 	assert(meta_info == meta_info_check);
 	*/
 

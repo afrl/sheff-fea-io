@@ -25,7 +25,7 @@ namespace fea_io
 	class MeshParWriter : public MeshWriter<GlobalIndex, LocalIndex, CoordType>
 	{
 	public:
-		typedef MeshMetaInfo<GlobalIndex, LocalIndex, CoordType> MeshMetaInfoType;
+		typedef MeshInfo<GlobalIndex, LocalIndex, CoordType> MeshInfoType;
 		typedef PartitionInfo<GlobalIndex, LocalIndex, CoordType> PartitionInfoType;
 		typedef Partition<GlobalIndex, LocalIndex, CoordType> PartitionType;
 

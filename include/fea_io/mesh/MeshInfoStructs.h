@@ -121,7 +121,7 @@ namespace fea_io
 	
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	struct MeshMetaInfo
+	struct MeshInfo
 	{
 		GlobalIndex total_num_nodes;
 		GlobalIndex total_num_elements;
@@ -130,6 +130,7 @@ namespace fea_io
 		std::vector<ComponentMetaInfo<LocalIndex>> components;
 		LocalIndex total_num_partitions;
 		std::vector<std::streamoff> partition_offsets;
+		ConnectivityScheme connectivity_scheme;
 
 		auto tie() const {
 			return std::tie(total_num_nodes,
@@ -139,13 +140,13 @@ namespace fea_io
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	bool operator ==(const MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& lhs, const MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& rhs)
+	bool operator ==(const MeshInfo<GlobalIndex, LocalIndex, CoordType>& lhs, const MeshInfo<GlobalIndex, LocalIndex, CoordType>& rhs)
 	{
 		return lhs.tie() == rhs.tie();
 	};
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void to_json(json& j, const MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& h)
+	void to_json(json& j, const MeshInfo<GlobalIndex, LocalIndex, CoordType>& h)
 	{
 		j = json{ {"total_num_nodes", h.total_num_nodes},
 			{"total_num_elements", h.total_num_elements},
@@ -153,12 +154,13 @@ namespace fea_io
 			{"extent", h.extent},
 			{"components", h.components},
 			{"total_num_partitions", h.total_num_partitions},
-			{"partition_offsets", h.partition_offsets}
+			{"partition_offsets", h.partition_offsets},
+			{"connectivity_scheme", h.connectivity_scheme}
 		};
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	void from_json(const json& j, MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& h)
+	void from_json(const json& j, MeshInfo<GlobalIndex, LocalIndex, CoordType>& h)
 	{
 		j.at("total_num_nodes").get_to(h.total_num_nodes);
 		j.at("total_num_elements").get_to(h.total_num_elements);
@@ -167,6 +169,7 @@ namespace fea_io
 		j.at("components").get_to(h.components);
 		j.at("total_num_partitions").get_to(h.total_num_partitions);
 		j.at("partition_offsets").get_to(h.partition_offsets);
+		j.at("connectivity_scheme").get_to(h.connectivity_scheme);
 	}
 
 	template<typename LocalIndex>
@@ -239,7 +242,7 @@ namespace fea_io
 		/// Returns the number of bytes needed within the binary mesh file
 		/// for this partition.  This method is used when the offsets are
 		/// being calculated.
-		std::streamoff get_size_needed(const MeshMetaInfo<GlobalIndex, LocalIndex, CoordType>& meta_info) const {
+		std::streamoff get_size_needed(const MeshInfo<GlobalIndex, LocalIndex, CoordType>& meta_info) const {
 			// Compute the sizes individually to allow debuggers to check values, but a release compile will
 			// optimize most of the code away.
 			const std::streamoff size_for_partition_header = sizeof(partition_id);

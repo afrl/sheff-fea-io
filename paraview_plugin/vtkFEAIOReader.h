@@ -1,10 +1,11 @@
 #include "vtkMultiBlockDataSetAlgorithm.h"
 #include "vtkSmartPointer.h"
 
+#include "PVReaderStructs.h"
+
 #include "fea_io/meta/MetaReader.h"
-#include "fea_io/mesh/MeshReader.h"
-#include "fea_io/data/DataReader.h"
-#include "fea_io/group/GroupReader.h"
+#include "fea_io/mesh/MeshInfoStructs.h"
+#include "fea_io/mesh/MeshStructs.h"
 
 #include <unordered_set>
 #include <set>
@@ -98,8 +99,6 @@ protected:
 	std::string CurrentMeshPath;
 	// The time values that are available in the data
 	std::vector<double> TimestepValues;
-	// A map relating the time value to the ID
-	std::map<double, IndexType> TimeToIDMap;
 	// The partitioins needed based on the user's selections
 	std::vector<IndexType> AllPartitionsNeeded;
 	// The indices (of AllPartitionsNeeded) for the partitions this processor is responsible for
@@ -131,24 +130,20 @@ private:
 	/// and which partitions were selected by the user when the data was read in.
 	void UpdateMyPartitions(vtkSmartPointer<vtkInformation>& outInfo);
 	void UpdateComponents();
-	/// Updates the output with the requested time, and returns the closest time ID
+	/// Updates the output with the requested time, and returns the closest time
 	/// in the data to the requested time.
-	unsigned int UpdateTime(vtkSmartPointer<vtkInformation>& outInfo,
+	double UpdateTime(vtkSmartPointer<vtkInformation>& outInfo,
 		vtkSmartPointer<vtkMultiBlockDataSet>& output);
 	
+	/// Given a partition, creates a VTK unstructured grid for a specified subcomponent
 	void CreateVTKMesh(
+		const fea_io::MeshInfo<IndexType, IndexType, CoordType>& meshInfo,
 		const fea_io::Partition<IndexType, IndexType, CoordType> &currPartition,
+		const IndexType subcomponentIndex,
 		vtkSmartPointer<vtkUnstructuredGrid>& mesh);
 
 	void CreateBlocksForPartitionByComponent(vtkSmartPointer<vtkMultiBlockDataSet>& output,
-		const PFECNativeInterface::NodeInfo &nodeInfo,
-		const PFECNativeInterface::ElementInfo &elementInfo,
-		const int partitionIndex,
-		const PFECNativeInterface::PFEC_INT partID,
-		const std::unique_ptr<PFECNativeInterface::DataReader>& orientReaderPtr,
-		const std::unique_ptr<PFECNativeInterface::DataReader>& dataReaderPtr,
-		const std::vector<PFECNativeInterface::DataMetaData> dataMeta,
-		const std::vector<unsigned int> pointDataInds,
-		const std::vector<unsigned int> cellDataInds,
-		const std::vector<unsigned int> pointDataWithAvgInds);
+		const fea_io::MeshInfo<IndexType, IndexType, CoordType>& meshInfo,
+		const fea_io::Partition<IndexType, IndexType, CoordType> &currPartition,
+		const std::vector<ArrayReaderPair>& arrayPairs);
 };
