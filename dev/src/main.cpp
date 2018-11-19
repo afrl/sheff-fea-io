@@ -96,8 +96,8 @@ std::vector<std::vector<float>> get_part0_data()
 {
 	std::vector<std::vector<float>> data = {
 		{0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0},
-		{1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0},
-		{1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0}
+		{2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0},
+		{2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0}
 	};
 	return data;
 }
@@ -106,8 +106,8 @@ std::vector<std::vector<float>> get_part1_data()
 {
 	std::vector<std::vector<float>> data = {
 		{0.5, 0, 0.75, 0, 0.5, 0, 0.75, 0, 0.5, 0, 0.75, 0},
-		{2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0},
-		{2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0}
+		{2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0},
+		{2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 2e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0, 1e6, 0, 0}
 	};
 	return data;
 }
@@ -275,8 +275,14 @@ bool test_data_writer()
 		auto data1 = get_part1_data();
 
 		for (auto i = 0; i < data0.size(); i++) {
-			writer.write(0, data_info[i].name, &data0[i][0], static_cast<int16_t>(data0[i].size()) / data_info[i].num_comps);
-			writer.write(1, data_info[i].name, &data1[i][0], static_cast<int16_t>(data1[i].size()) / data_info[i].num_comps);
+			if (data_info[i].type == ArrayType::QuadPointByElement) {
+				writer.write_quad(0, data_info[i].name, &data0[i][0], { 4, 4 });
+				writer.write_quad(1, data_info[i].name, &data1[i][0], { 4, 4 });
+			}
+			else {
+				writer.write(0, data_info[i].name, &data0[i][0], static_cast<int16_t>(data0[i].size()) / data_info[i].num_comps);
+				writer.write(1, data_info[i].name, &data1[i][0], static_cast<int16_t>(data1[i].size()) / data_info[i].num_comps);
+			}
 		}
 	}
 

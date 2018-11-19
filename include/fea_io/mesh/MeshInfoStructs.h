@@ -15,7 +15,7 @@ namespace fea_io
 	using json = nlohmann::json;
 
 	template<typename LocalIndex>
-	struct ComponentMetaInfo
+	struct ComponentInfo
 	{
 		LocalIndex id;
 		std::string name;
@@ -28,7 +28,7 @@ namespace fea_io
 	};
 
 	template<typename LocalIndex>
-	void to_json(json& j, const ComponentMetaInfo<LocalIndex>& h)
+	void to_json(json& j, const ComponentInfo<LocalIndex>& h)
 	{
 		j = json{ {"id", h.id},
 			{"name", h.name},
@@ -38,7 +38,7 @@ namespace fea_io
 	}
 
 	template<typename LocalIndex>
-	void from_json(const json& j, ComponentMetaInfo<LocalIndex>& h)
+	void from_json(const json& j, ComponentInfo<LocalIndex>& h)
 	{
 		j.at("id").get_to(h.id);
 		j.at("name").get_to(h.name);
@@ -127,7 +127,7 @@ namespace fea_io
 		GlobalIndex total_num_elements;
 		LocalIndex dimensionality;
 		Extent<CoordType> extent;
-		std::vector<ComponentMetaInfo<LocalIndex>> components;
+		std::vector<ComponentInfo<LocalIndex>> components;
 		LocalIndex total_num_partitions;
 		std::vector<std::streamoff> partition_offsets;
 		ConnectivityScheme connectivity_scheme;
@@ -256,7 +256,7 @@ namespace fea_io
 			for (auto& subcomponent : subcomponents) {
 				// Note: it was already tested that the component id exists in the meta_info
 				auto component_iter = std::find_if(meta_info.components.begin(), meta_info.components.end(),
-					[id = subcomponent.component_id](const ComponentMetaInfo<LocalIndex>& x) -> bool {
+					[id = subcomponent.component_id](const ComponentInfo<LocalIndex>& x) -> bool {
 					return x.id == id;
 				});
 				if (component_iter == meta_info.components.end())

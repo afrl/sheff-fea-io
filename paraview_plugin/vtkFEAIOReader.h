@@ -17,6 +17,9 @@ class vtkCallbackCommand;
 class vtkDataArraySelection;
 class vtkUnstructuredGrid;
 class vtkPoints;
+class vtkIntArray;
+class vtkFloatArray;
+class vtkDoubleArray;
 
 class vtkFEAIOReader : public vtkMultiBlockDataSetAlgorithm
 {
@@ -165,8 +168,22 @@ private:
 		const fea_io::Subcomponent<IndexType, CoordType>& subcomponent,
 		vtkSmartPointer<vtkUnstructuredGrid>& mesh);
 
-	void CreateBlocksForPartitionByComponent(vtkSmartPointer<vtkMultiBlockDataSet>& output,
+	void CreateBlocksForPartitionByComponent(
+		vtkSmartPointer<vtkMultiBlockDataSet>& output,
 		const fea_io::MeshInfo<IndexType, IndexType, CoordType>& meshInfo,
 		const fea_io::Partition<IndexType, IndexType, CoordType> &currPartition,
 		const std::vector<ArrayReaderPair>& arrayPairs);
+
+	template<typename ValueType, typename VTKArrayType>
+	void CreateDataArrayForSubcomponents_Helper(
+		vtkSmartPointer<vtkMultiBlockDataSet>& output,
+		const fea_io::Partition<IndexType, IndexType, CoordType> &currPartition,
+		const fea_io::ArrayInfo& arrayInfo,
+		const std::vector<ValueType>& data);
+
+	template<typename ValueType, typename VTKArrayType>
+	void CreateDataArrayForSubcomponents(
+		vtkSmartPointer<vtkMultiBlockDataSet>& output,
+		const fea_io::Partition<IndexType, IndexType, CoordType> &currPartition,
+		const ArrayReaderPair& arrayReaderPair);
 };

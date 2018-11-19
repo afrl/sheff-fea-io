@@ -1,0 +1,1 @@
+What happens in ParaView if you mix cell and node LCS assignment since there are two arrays? Test.

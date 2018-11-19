@@ -8,25 +8,26 @@
 #include "vtkStreamingDemandDrivenPipeline.h"
 #include "vtkExtractTimeSteps.h"
 #include "vtkNew.h"
-
 #include "vtkMultiBlockDataSet.h"
 #include "vtkMultiPieceDataSet.h"
 #include "vtkDataSet.h"
 #include "vtkFieldData.h"
 #include "vtkCellData.h"
 #include "vtkPointData.h"
+#include "vtkUnstructuredGrid.h"
+#include "vtkCellType.h"
+#include "vtkSmartPointer.h"
+// VTK arrays used
 #include "vtkShortArray.h"
 #include "vtkIntArray.h"
-#include "vtkLongArray.h"
 #include "vtkLongLongArray.h"
 #include "vtkFloatArray.h"
 #include "vtkDoubleArray.h"
-#include "vtkUnstructuredGrid.h"
-#include "vtkCellType.h"
-#include "vtkUnsignedCharArray.h"
+#include "vtkUnsignedCharArray.h" // For ghost arrays
+//
+//#include "vtkLongLongArray.h"
 
-#include "vtkSmartPointer.h"
-
+#include "ArrayHelpers.h"
 #include "ConnectivityHelpers.h"
 
 #include "fea_io/common/Exceptions.h"
@@ -39,41 +40,6 @@
 #include <math.h>
 #include <set>
 #include <unordered_set>
-
-// TODO move to a header
-template<typename PVType, typename IndexType, typename ValueType>
-PVType* CreatePartitionArrayForComponent(
-	const std::string& arrayName,
-	const int64_t numComps,
-	const std::vector<ValueType>& partitionValues,
-	const std::vector<IndexType>& subcomponentIndices)
-{
-	PVType* arr = PVType::New();
-	arr->SetName(arrayName.c_str());
-	arr->SetNumberOfComponents(numComps);
-	const int64_t numValues = static_cast<int64_t>(subcomponentIndices.size()) / numComps;
-	arr->SetNumberOfTuples(numValues);
-	for (auto i = 0; i < numValues; i++)
-		arr->SetTypedTuple(i, &partitionValues[numComps*subcomponentIndices[i]]);
-	return arr;
-}
-// TODO move to a header
-// Assigns every node or element to the same value
-template<typename PVType, typename IndexType, typename ValueType>
-PVType* CreatePartitionArrayForComponent(
-	const std::string& arrayName,
-	const ValueType& value,
-	const std::vector<IndexType>& subcomponentIndices)
-{
-	PVType* arr = PVType::New();
-	arr->SetName(arrayName.c_str());
-	arr->SetNumberOfComponents(1);
-	const int64_t numValues = static_cast<int64_t>(subcomponentIndices.size());
-	arr->SetNumberOfTuples(numValues);
-	for (auto i = 0; i < numValues; i++)
-		arr->SetTypedTuple(i, &value);
-	return arr;
-}
 
 vtkStandardNewMacro(vtkFEAIOReader);
 
@@ -285,6 +251,9 @@ int vtkFEAIOReader::RequestData(
 
     // Get the output
 	vtkSmartPointer<vtkMultiBlockDataSet> output =  vtkMultiBlockDataSet::SafeDownCast(outInfo->Get(vtkMultiBlockDataSet::DATA_OBJECT()));
+	// Consider checking if the block structure needs to change for subsequent RequestData calls.  Right now, it will
+	// just clear the structure and recreate it.
+	output->Initialize();
 
 	// Loop over the partitions and read the subcomponents to create the blocks of unstructured grids
 	// The tree organization:
@@ -300,10 +269,21 @@ int vtkFEAIOReader::RequestData(
 	for (auto componentID : this->ComponentsNeeded)
 	{
 		vtkSmartPointer<vtkMultiBlockDataSet> componentMultiBlock = vtkSmartPointer<vtkMultiBlockDataSet>::New();
-		componentMultiBlock->SetNumberOfBlocks(static_cast<int>(this->AllPartitionsNeeded.size()));
+		// Create a block for each partition, whether or not it will be used.  An empty block is cheap.
+		// Otherwise, other methods will have to keep track of partition block IDs in addition to partition IDs
+		componentMultiBlock->SetNumberOfBlocks(static_cast<int>(this->PartitionSelection->GetNumberOfArrays()));
 		output->SetBlock(componentBlockID, componentMultiBlock);
 		std::string  componentBlockName = "Component " + std::to_string(componentID);
 		output->GetMetaData(componentBlockID)->Set(vtkCompositeDataSet::NAME(), componentBlockName.c_str());
+
+		// Create the mesh object for each partition
+		for (unsigned int partitionBlockID = 0; partitionBlockID < componentMultiBlock->GetNumberOfBlocks(); partitionBlockID++) {
+			vtkSmartPointer<vtkUnstructuredGrid> mesh = vtkUnstructuredGrid::New();
+			componentMultiBlock->SetBlock(partitionBlockID, mesh);
+			std::string ugridName = "Component" + std::to_string(componentID) + "Part" + std::to_string(partitionBlockID);
+			componentMultiBlock->GetMetaData(partitionBlockID)->Set(vtkCompositeDataSet::NAME(), ugridName);
+		}
+
 		componentBlockID++;
 	}
 
@@ -427,9 +407,7 @@ void vtkFEAIOReader::ReadMetaInformation()
 		this->CellDataArraySelection->AddArray("GlobalIDs", false);
 		this->CellDataArraySelection->AddArray("PartitionIDs", false);
 		this->CellDataArraySelection->AddArray("ComponentIDs", true);
-		this->CellDataArraySelection->AddArray("LocalX", false);
-		this->CellDataArraySelection->AddArray("LocalY", false);
-		this->CellDataArraySelection->AddArray("LocalZ", false);
+		this->CellDataArraySelection->AddArray("LocalCoordinateSystems", false);
 		
 		// Get what data exists among all of the time steps
 		std::set<std::string> allPointArrays;
@@ -531,16 +509,6 @@ double vtkFEAIOReader::UpdateTime(vtkSmartPointer<vtkInformation>& outInfo, vtkS
 	}
 	return 0;
 }
-
-/*
-void vtkFEAIOReader::UpdateOutput()
-{
-	if (CurrentOutputVector == nullptr)
-		return;
-
-	RequestData(nullptr, nullptr, CurrentOutputVector);
-}
-*/
 
 void vtkFEAIOReader::CreateVTKMesh(
 	const fea_io::MeshInfo<IndexType, IndexType, CoordType>& meshInfo,
@@ -652,15 +620,11 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(vtkSmartPointer<vtkMult
 			continue;
 		auto& subcomponent = *find_iter;
 
-		// Create the VTK UnstructuredGrid container and fill it
-		vtkSmartPointer<vtkUnstructuredGrid> mesh = vtkSmartPointer<vtkUnstructuredGrid>::New();
-		this->CreateVTKMesh(meshInfo, currPartition, subcomponent, mesh);
-
-		// Insert the mesh into the multiblock container
+		// Get the VTK UnstructuredGrid container and fill it
 		auto componentMultiBlock = vtkMultiBlockDataSet::SafeDownCast(output->GetBlock(componentBlockID));
-		componentMultiBlock->SetBlock(currPartition.partition_id, mesh);
-		std::string ugridName = "Component" + std::to_string(componentID) + "Part" + std::to_string(currPartition.partition_id);
-		componentMultiBlock->GetMetaData(currPartition.partition_id)->Set(vtkCompositeDataSet::NAME(), ugridName);
+		vtkSmartPointer<vtkUnstructuredGrid> mesh = vtkUnstructuredGrid::SafeDownCast(componentMultiBlock->GetBlock(currPartition.partition_id));
+		mesh->Initialize();
+		this->CreateVTKMesh(meshInfo, currPartition, subcomponent, mesh);
 
 		// Create point array for global numbers
 		if (this->PointDataArraySelection->ArrayIsEnabled("GlobalIDs"))
@@ -687,104 +651,142 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(vtkSmartPointer<vtkMult
 			mesh->GetCellData()->AddArray(
 				CreatePartitionArrayForComponent<VTKIndexArrayType>("CellComponentIDs", subcomponent.component_id, subcomponent.elements_in_subcomponent));
 
-		/*
-		// Create cell array for local X vector
-		bool needX = this->SelectedCellArrays.find("LocalX") != this->SelectedCellArrays.end() && orientData.size() > 0;
-		bool needY = this->SelectedCellArrays.find("LocalY") != this->SelectedCellArrays.end() && orientData.size() > 0;
-		bool needZ = this->SelectedCellArrays.find("LocalZ") != this->SelectedCellArrays.end() && orientData.size() > 0;
-		if (needX || needY || needZ)
-			CreateOrientAveragedArray(orientData,
-				nodeOldLocalToNewLocalMap, localNodeIndicesUsed, localElementIndicesUsed,
-				elementInfo, needX, needY, needZ,
-				mesh);
-				*/
+		// Create vectors for the local coordinate systems
+		if (this->PointDataArraySelection->ArrayIsEnabled("LocalCoordinateSystems") || this->CellDataArraySelection->ArrayIsEnabled("LocalCoordinateSystems")) {
+			// Find the corresponding component in meshInfo for this subcomponent
+			auto findIter = std::find_if(meshInfo.components.begin(), meshInfo.components.end(),
+				[id = subcomponent.component_id](const auto& c) -> bool {
+				return c.id == id;
+			});
+			if (findIter == meshInfo.components.end())
+				throw _MSG_EXCEPT("Could not find the component corresponding to the given subcomponent.");
+			const fea_io::ComponentInfo<IndexType>& componentInfo = (*findIter);
+
+			if (componentInfo.lcs_assignment == fea_io::LCSAssignment::Node) {
+				auto lcsArrays = CreateLocalCoordinateSystems<IndexType, CoordType, vtkFloatArray>(componentInfo, subcomponent);
+				if (lcsArrays[0]->GetNumberOfTuples() != mesh->GetNumberOfPoints())
+					throw _MSG_EXCEPT_C("The number lcs parameters for subcomponent " + std::to_string(subcomponent.component_id) + " in partition " + std::to_string(currPartition.partition_id) + " did not match the number of points.");
+				mesh->GetPointData()->AddArray(lcsArrays[0]);
+				mesh->GetPointData()->AddArray(lcsArrays[1]);
+				mesh->GetPointData()->AddArray(lcsArrays[2]);
+			}
+			else if (componentInfo.lcs_assignment == fea_io::LCSAssignment::Element) {
+				auto lcsArrays = CreateLocalCoordinateSystems<IndexType, CoordType, vtkFloatArray>(componentInfo, subcomponent);
+				if (lcsArrays[0]->GetNumberOfTuples() != mesh->GetNumberOfCells())
+					throw _MSG_EXCEPT_C("The number lcs parameters for subcomponent " + std::to_string(subcomponent.component_id) + " in partition " + std::to_string(currPartition.partition_id) + " did not match the number of cells.");
+				mesh->GetCellData()->AddArray(lcsArrays[0]);
+				mesh->GetCellData()->AddArray(lcsArrays[1]);
+				mesh->GetCellData()->AddArray(lcsArrays[2]);
+			}
+			else if (componentInfo.lcs_assignment == fea_io::LCSAssignment::Component) {
+				auto lcsArrays = CreateLocalCoordinateSystems<IndexType, CoordType, vtkFloatArray>(componentInfo.lcs_parameterization, subcomponent.lcs_parameters_in_subcomponent, mesh->GetNumberOfCells());
+				mesh->GetCellData()->AddArray(lcsArrays[0]);
+				mesh->GetCellData()->AddArray(lcsArrays[1]);
+				mesh->GetCellData()->AddArray(lcsArrays[2]);
+			}
+			else if (componentInfo.lcs_assignment == fea_io::LCSAssignment::None) {
+				auto lcsArrays = CreateLocalCoordinateSystems<IndexType, CoordType, vtkFloatArray>(fea_io::LCSParameterization::Quaternion, {1, 0, 0, 0}, mesh->GetNumberOfCells());
+				mesh->GetCellData()->AddArray(lcsArrays[0]);
+				mesh->GetCellData()->AddArray(lcsArrays[1]);
+				mesh->GetCellData()->AddArray(lcsArrays[2]);
+			}
+		}
 
 		componentBlockID++;
 	} // End loop over domains
 
-
-
-	/*
-
-	// Nodal data
-	std::vector<std::vector<std::vector<double>>> nodalData;
-	nodalData.resize(pointDataInds.size());
-	for (auto i = 0; i < pointDataInds.size(); i++) {
-		dataReaderPtr->read_part_unique_data(partID, dataMeta[pointDataInds[i]].id, nodalData[i]);
+	// Create data arrays
+	for (auto& arrayPair : arrayPairs) {
+		if (arrayPair.arrayInfo.data_type == fea_io::ArrayDataType::Integral) {
+			// Handle various integral precisions
+			if (arrayPair.arrayInfo.data_type_num_bytes == 2)
+				CreateDataArrayForSubcomponents<int16_t, vtkShortArray>(output, currPartition, arrayPair);
+			else if (arrayPair.arrayInfo.data_type_num_bytes == 4)
+				CreateDataArrayForSubcomponents<int32_t, vtkIntArray>(output, currPartition, arrayPair);
+			else if (arrayPair.arrayInfo.data_type_num_bytes == 8)
+				CreateDataArrayForSubcomponents<int64_t, vtkLongLongArray> (output, currPartition, arrayPair);
+		}
+		else if (arrayPair.arrayInfo.data_type == fea_io::ArrayDataType::FloatingPoint) {
+			// Handle various floating point precisions
+			if (arrayPair.arrayInfo.data_type_num_bytes == 4)
+				CreateDataArrayForSubcomponents<float, vtkFloatArray>(output, currPartition, arrayPair);
+			else
+				CreateDataArrayForSubcomponents<double, vtkDoubleArray>(output, currPartition, arrayPair);
+		}
+		else
+			throw _MSG_EXCEPT_C("Data type not supported.");
 	}
-	// Cell data
-	std::vector< std::vector< std::vector<double> > > cellData;
-	cellData.resize(cellDataInds.size());
-	for (auto i = 0; i < cellDataInds.size(); i++)
-		dataReaderPtr->read_part_unique_data(partID, dataMeta[cellDataInds[i]].id, cellData[i]);
-	// Nodal by cell data that needs to be averaged first within domains
-	std::vector< std::vector< std::vector< std::vector<double> > > > nodalByCellData;
-	nodalByCellData.resize(pointDataWithAvgInds.size());
-	for (auto i = 0; i < pointDataWithAvgInds.size(); i++)
-		dataReaderPtr->read_part_by_elem_data(partID, dataMeta[pointDataWithAvgInds[i]].id, nodalByCellData[i]);
-	domainBlockID = 0;
-	for (auto domainID : this->ComponentsNeeded)
+}
+
+template<typename ValueType, typename VTKArrayType>
+inline void vtkFEAIOReader::CreateDataArrayForSubcomponents_Helper(vtkSmartPointer<vtkMultiBlockDataSet>& output, const fea_io::Partition<IndexType, IndexType, CoordType>& currPartition, const fea_io::ArrayInfo & arrayInfo, const std::vector<ValueType>& data)
+{
+	unsigned int componentBlockID = 0;
+	std::size_t nodeByComponentOffset = 0;
+	std::vector<IndexType> componentToDataIndexMap;
+	for (auto componentID : this->ComponentsNeeded)
 	{
-		// Figure out which elements and nodes are needed for this domain
-		std::vector<unsigned int> localNodeIndicesUsed;
-		std::vector<unsigned int> localElementIndicesUsed;
-		std::map<unsigned int, unsigned int> nodeOldLocalToNewLocalMap;
-		this->GetLocalIndicesNeededForComponent(partID, domainID, // input
-			nodeInfo, elementInfo, // input
-			nodeOldLocalToNewLocalMap, // output
-			localNodeIndicesUsed, localElementIndicesUsed); // output
+		// Find the subcomponent of the current component in the current partition
+		auto find_iter = std::find_if(currPartition.subcomponents.begin(),
+			currPartition.subcomponents.end(),
+			[&componentID](const fea_io::Subcomponent<IndexType, CoordType>& subcomp) -> bool { return subcomp.component_id == componentID; });
+		// If the component does not have a subcomponent on this partition, then move on to the next component
+		if (find_iter == currPartition.subcomponents.end())
+			continue;
+		const fea_io::Subcomponent<IndexType, CoordType>& subcomponent = *find_iter;
 
-															// Get the mesh
-		auto domainMultiBlock = vtkMultiBlockDataSet::SafeDownCast(output->GetBlock(domainBlockID));
-		auto mesh = vtkUnstructuredGrid::SafeDownCast(domainMultiBlock->GetBlock(partitionIndex));
+		// Get the VTK mesh from the multiblock data structure
+		auto componentMultiBlock = vtkMultiBlockDataSet::SafeDownCast(output->GetBlock(componentBlockID));
+		auto mesh = vtkUnstructuredGrid::SafeDownCast(componentMultiBlock->GetBlock(currPartition.partition_id));
 
-		// Insert the nodal data
-		for (auto i = 0; i < pointDataInds.size(); i++) {
-			vtkFloatArray* pointArray = vtkFloatArray::New();
-			auto dataInd = pointDataInds[i];
-			PRINT_DEBUG_STR("Inserting Point Data for Component " + std::to_string(domainID) + ": " + dataMeta[dataInd].name);
-			pointArray->SetName(dataMeta[dataInd].name.c_str());
-			pointArray->SetNumberOfComponents(dataMeta[dataInd].num_comps);
-			pointArray->SetNumberOfTuples(localNodeIndicesUsed.size());
-			for (auto j = 0; j < localNodeIndicesUsed.size(); j++)
-				pointArray->SetTuple(j, &nodalData[i][localNodeIndicesUsed[j]][0]);
-			mesh->GetPointData()->AddArray(pointArray);
-		}
-
-		// Insert the cell data
-		for (auto i = 0; i < cellDataInds.size(); i++) {
-			vtkFloatArray* cellArray = vtkFloatArray::New();
-			auto dataInd = cellDataInds[i];
-			PRINT_DEBUG_STR("Insert Cell Data for Component " + std::to_string(domainID) + ": " + dataMeta[dataInd].name);
-			cellArray->SetName(dataMeta[dataInd].name.c_str());
-			cellArray->SetNumberOfComponents(dataMeta[dataInd].num_comps);
-			cellArray->SetNumberOfTuples(localElementIndicesUsed.size());
-			for (auto j = 0; j < localElementIndicesUsed.size(); j++)
-				cellArray->SetTuple(j, &cellData[i][localElementIndicesUsed[j]][0]);
-			mesh->GetCellData()->AddArray(cellArray);
-		}
-
-		// For each nodal by cell data average for this domain and partition then create
-		// a point data array
-		std::vector< std::vector<double> > averagedData(localNodeIndicesUsed.size());
-		std::vector<unsigned int> numEntriesSummed(localNodeIndicesUsed.size());
-		for (auto i = 0; i < pointDataWithAvgInds.size(); i++) {
-			auto dataInd = pointDataWithAvgInds[i];
-			PRINT_DEBUG_STR("Averaging Data: " + dataMeta[dataInd].name);
+		if (arrayInfo.type == fea_io::ArrayType::Node) {
 			mesh->GetPointData()->AddArray(
-				CreateNodalAveragedArray<vtkFloatArray>(dataMeta[dataInd].name.c_str(),
-					dataMeta[dataInd].num_comps,
-					nodalByCellData[i],
-					nodeOldLocalToNewLocalMap,
-					localNodeIndicesUsed,
-					localElementIndicesUsed,
-					elementInfo));
+				CreatePartitionArrayForComponent<VTKArrayType>(arrayInfo.name, arrayInfo.num_comps, data, subcomponent.nodes_in_subcomponent));
+		}
+		else if (arrayInfo.type == fea_io::ArrayType::Element || arrayInfo.type == fea_io::ArrayType::QuadPointByElement) {
+			// Note: ArrayType::QuadPointByElement data has been averaged to be one per a cell in CreateDataArrayForSubcomponents
+			mesh->GetCellData()->AddArray(
+				CreatePartitionArrayForComponent<VTKArrayType>(arrayInfo.name, arrayInfo.num_comps, data, subcomponent.elements_in_subcomponent));
+		}
+		else if (arrayInfo.type == fea_io::ArrayType::NodeByComponent) {
+			// Note: the subcomponents were written sequentially to the block of data for this partition, so generate the relevant indices
+			componentToDataIndexMap.resize(subcomponent.nodes_in_subcomponent.size());
+			std::iota(componentToDataIndexMap.begin(), componentToDataIndexMap.end(), static_cast<int>(nodeByComponentOffset));
+			mesh->GetPointData()->AddArray(
+				CreatePartitionArrayForComponent<VTKArrayType>(arrayInfo.name, arrayInfo.num_comps, data, componentToDataIndexMap));
+			nodeByComponentOffset += subcomponent.nodes_in_subcomponent.size();
+		}
+		else
+			throw _MSG_EXCEPT_C("Array types requiring averaging have not been implemented yet.");
+
+		componentBlockID++;
+	}
+}
+
+template<typename ValueType, typename VTKArrayType>
+void vtkFEAIOReader::CreateDataArrayForSubcomponents(vtkSmartPointer<vtkMultiBlockDataSet>& output, const fea_io::Partition<IndexType, IndexType, CoordType>& currPartition, const ArrayReaderPair & arrayReaderPair)
+{
+	std::vector<ValueType> data;
+	// For Quad point data, we need to average to cells and the read call is different
+	if (arrayReaderPair.arrayInfo.type == fea_io::ArrayType::QuadPointByElement) {
+		std::vector<int16_t> numQuadsPerElem;
+		arrayReaderPair.readerPtr->read_quad(currPartition.partition_id, arrayReaderPair.arrayInfo.name, data, numQuadsPerElem);
+
+		// Average the quad point data to be one per cell
+		std::size_t currOffset = 0;
+		std::vector<ValueType> averagedData(currPartition.element_global_ids.size() * arrayReaderPair.arrayInfo.num_comps, 0);
+		for (auto elemInd = 0; elemInd < numQuadsPerElem.size(); elemInd++) {
+			for (auto quadInd = 0; quadInd < numQuadsPerElem[elemInd]; quadInd++)
+				for (auto i = 0; i < arrayReaderPair.arrayInfo.num_comps; i++)
+					averagedData[arrayReaderPair.arrayInfo.num_comps * elemInd + i] += data[currOffset + arrayReaderPair.arrayInfo.num_comps * quadInd + i] / numQuadsPerElem[elemInd];
+			currOffset += arrayReaderPair.arrayInfo.num_comps * numQuadsPerElem[elemInd];
 		}
 
-		domainBlockID++;
-	} // End loop over domains
-	nodalData.clear();
-	cellData.clear();
-	*/
+		CreateDataArrayForSubcomponents_Helper<ValueType, VTKArrayType>(output, currPartition, arrayReaderPair.arrayInfo, averagedData);
+	}
+	else {
+		arrayReaderPair.readerPtr->read(currPartition.partition_id, arrayReaderPair.arrayInfo.name, data);
+		CreateDataArrayForSubcomponents_Helper<ValueType, VTKArrayType>(output, currPartition, arrayReaderPair.arrayInfo, data);
+	}
 }
 

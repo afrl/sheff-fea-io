@@ -58,6 +58,9 @@ namespace fea_io
 		template<typename T, typename std::enable_if<std::is_floating_point<T>::value, T>::type* = nullptr>
 		static void binary_read(std::ifstream& in, std::vector<T>& val, const std::size_t num_values, const int8_t size_of_data_type_in_file);
 
+		template<typename T, typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
+		static void binary_read(std::ifstream& in, T* val, const std::size_t num_values, const int8_t size_of_data_type_in_file);
+
 		template<typename T, typename std::enable_if<std::is_floating_point<T>::value, T>::type* = nullptr>
 		static void binary_read(std::ifstream& in, T* val, const std::size_t num_values, const int8_t size_of_data_type_in_file);
 
@@ -169,6 +172,28 @@ namespace fea_io
 			std::vector<float> tmp(num_values);
 			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(num_values * sizeof(float)));
 			val.assign(tmp.begin(), tmp.end());
+		}
+		else
+			throw _MSG_EXCEPT("Conversion not available to data type with " + std::to_string(size_of_data_type_in_file) + " bytes.");
+	}
+
+	template<typename T, typename std::enable_if<std::is_integral<T>::value, T>::type*>
+	inline void IOUtils::binary_read(std::ifstream & in, T * val, const std::size_t num_values, const int8_t size_of_data_type_in_file)
+	{
+		if (size_of_data_type_in_file == sizeof(T)) {
+			in.read(reinterpret_cast<char*>(&val[0]), static_cast<std::streamsize>(num_values * sizeof(T)));
+		}
+		else if (size_of_data_type_in_file == sizeof(int16_t)) {
+			std::vector<int16_t> tmp(num_values);
+			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(num_values * sizeof(int16_t)));
+			for (auto i = 0; i < num_values; i++)
+				val[i] = static_cast<T>(tmp[i]);
+		}
+		else if (size_of_data_type_in_file == sizeof(int32_t)) {
+			std::vector<int32_t> tmp(num_values);
+			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(num_values * sizeof(int32_t)));
+			for (auto i = 0; i < num_values; i++)
+				val[i] = static_cast<T>(tmp[i]);
 		}
 		else
 			throw _MSG_EXCEPT("Conversion not available to data type with " + std::to_string(size_of_data_type_in_file) + " bytes.");

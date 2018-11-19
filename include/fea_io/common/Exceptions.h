@@ -5,9 +5,9 @@
 #include <typeinfo>
 
 // Use this in functions
-#define _MSG_EXCEPT(m) MsgException(__FILE__, "", __func__, __LINE__, m)
+#define _MSG_EXCEPT(m) fea_io::MsgException(__FILE__, "", __func__, __LINE__, m)
 // Use this in class methods
-#define _MSG_EXCEPT_C(m) MsgException(__FILE__, typeid(*this).name(), __func__, __LINE__, m)
+#define _MSG_EXCEPT_C(m) fea_io::MsgException(__FILE__, typeid(*this).name(), __func__, __LINE__, m)
 
 namespace fea_io
 {

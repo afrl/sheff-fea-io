@@ -94,7 +94,9 @@ namespace fea_io
 				return size_needed;
 			}
 			else if (type == ArrayType::QuadPointByElement)
-				return total_num_quad_points * num_comps * data_type_num_bytes;
+				// The number of quad points per an element will be written along with the data for this
+				// case, so account for the size of those lengths.  Type will be int16_t.
+				return pi.num_elements * sizeof(int16_t) + total_num_quad_points * num_comps * data_type_num_bytes;
 			else
 				throw _MSG_EXCEPT_C("Unrecognized data array type.");
 		}

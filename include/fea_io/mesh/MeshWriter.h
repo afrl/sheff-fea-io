@@ -229,7 +229,7 @@ namespace fea_io
 		// Check that the component ID exists in the meta_info
 		for (auto& subcomponent : partition.subcomponents) {
 			auto match_iter = std::find_if(meta_info_.components.begin(), meta_info_.components.end(),
-				[id = subcomponent.component_id](const ComponentMetaInfo<LocalIndex>& x) -> bool {
+				[id = subcomponent.component_id](const ComponentInfo<LocalIndex>& x) -> bool {
 				return x.id == id;
 			});
 			if (match_iter == meta_info_.components.end())
@@ -258,7 +258,7 @@ namespace fea_io
 		for (auto& subcomponent : partition.subcomponents) {
 			// Note: it was already tested that the component id exists in the meta_info
 			auto component = *std::find_if(meta_info_.components.begin(), meta_info_.components.end(),
-				[id = subcomponent.component_id](const ComponentMetaInfo<LocalIndex>& x) -> bool {
+				[id = subcomponent.component_id](const ComponentInfo<LocalIndex>& x) -> bool {
 				return x.id == id;
 			});
 
@@ -331,7 +331,7 @@ namespace fea_io
 
 			// Note: it was already tested that the component id exists in the meta_info
 			auto component = *std::find_if(meta_info_.components.begin(), meta_info_.components.end(),
-				[id = subcomp_info.component_id](const ComponentMetaInfo<LocalIndex>& x) -> bool {
+				[id = subcomp_info.component_id](const ComponentInfo<LocalIndex>& x) -> bool {
 				return x.id == id;
 			});
 

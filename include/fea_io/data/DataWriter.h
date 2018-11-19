@@ -41,12 +41,27 @@ namespace fea_io
 		// Note: the order of node/element/quad-point(s) for which this method is
 		//       called should match the order in the mesh file.
 		//       It is up to the calling program to ensure the order is correct.
+		// Notes for different array types:
+		// - NodeByComponent: this method can be called once per a partition or once per
+		//		a subcomponent, but it is just important that the order of the subcomponents
+		//      (regardless of how you choose to call this method) are consistent with the MeshInfo
+		//      passed to initialize(...)
+		// - QuadPointByElem: this method should be called once per an element (or call write_quad
+		//      if you want to call one method for multiple elements.  Just be sure the ordering of
+		//      elements matches the order of elements in the partition.
 		template<typename DataType>
 		void write(
 			const LocalIndex partition_id,
 			const std::string array_name,
 			const DataType* data,
 			const LocalIndex num_values = 1);
+
+		template<typename DataType>
+		void write_quad(
+			const LocalIndex partition_id,
+			const std::string array_name,
+			const DataType* data,
+			const std::vector<LocalIndex> num_quads_per_elem);
 
 		// Writes array
 		template<typename DataType>
@@ -159,12 +174,37 @@ namespace fea_io
 		auto find_iter = array_name_to_id_map_.find(array_name);
 		if (find_iter == array_name_to_id_map_.end())
 			throw _MSG_EXCEPT_C("Data array " + array_name + " was not found. Be sure to pass all of the arrays when you call DataWriter::initialize(...).");
-
+			
 		auto& array_info = array_infos_[find_iter->second];
 		out_stream_.seekp(array_info.begin_offsets[partition_id] + array_info.curr_bytes_written[partition_id]);
+
+		// For quad point data, write how many quad points there are for this element (assumes this is called once per an element)
+		if (array_info.type == ArrayType::QuadPointByElement) {
+			IOUtils::binary_write(out_stream_, static_cast<int16_t>(num_values));
+			array_info.curr_bytes_written[partition_id] += sizeof(int16_t);
+		}
+		// Write the array of data
 		for (auto i = 0; i < num_values; i++)
 			IOUtils::binary_write(out_stream_, &data[i*array_info.num_comps], array_info.num_comps);
+		
 		array_info.curr_bytes_written[partition_id] += num_values * array_info.num_comps * sizeof(DataType);
+	}
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	template<typename DataType>
+	inline void DataWriter<GlobalIndex, LocalIndex, CoordType>::write_quad(const LocalIndex partition_id, const std::string array_name, const DataType * data, const std::vector<LocalIndex> num_quads_per_elem)
+	{
+		auto find_iter = array_name_to_id_map_.find(array_name);
+		if (find_iter == array_name_to_id_map_.end())
+			throw _MSG_EXCEPT_C("Data array " + array_name + " was not found. Be sure to pass all of the arrays when you call DataWriter::initialize(...).");
+
+		auto& array_info = array_infos_[find_iter->second];
+
+		std::streamoff curr_offset = 0;
+		for (auto num_quads : num_quads_per_elem) {
+			write(partition_id, array_name, &data[curr_offset], num_quads);
+			curr_offset += num_quads * array_info.num_comps;
+		}
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
@@ -177,8 +217,16 @@ namespace fea_io
 
 		auto& array_info = array_infos_[find_iter->second];
 		out_stream_.seekp(array_info.begin_offsets[partition_id] + array_info.curr_bytes_written[partition_id]);
+
+		// For quad point data, write how many quad points there are for this element (assumes this is called once per an element)
+		if (array_info.type == ArrayType::QuadPointByElement) {
+			IOUtils::binary_write(out_stream_, static_cast<int16_t>(num_values));
+			array_info.curr_bytes_written[partition_id] += sizeof(int16_t);
+		}
+		// Write the array of data
 		for (auto i = 0; i < num_values; i++)
 			IOUtils::binary_write(out_stream_, data[i], array_info.num_comps);
+		
 		array_info.curr_bytes_written[partition_id] += num_values * array_info.num_comps * sizeof(DataType);
 	}
 
