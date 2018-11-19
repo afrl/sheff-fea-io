@@ -24,8 +24,6 @@
 #include "vtkFloatArray.h"
 #include "vtkDoubleArray.h"
 #include "vtkUnsignedCharArray.h" // For ghost arrays
-//
-//#include "vtkLongLongArray.h"
 
 #include "ArrayHelpers.h"
 #include "ConnectivityHelpers.h"

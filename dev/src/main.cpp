@@ -11,6 +11,7 @@
 #include "fea_io/mesh/MeshParWriter.h"
 #include "fea_io/mesh/MeshReader.h"
 #include "fea_io/meta/MetaReader.h"
+#include "fea_io/meta/MetaWriter.h"
 
 using json = nlohmann::json;
 using namespace fea_io;
@@ -369,11 +370,24 @@ bool test_group_reader()
 	return true;
 }
 
+bool test_meta_writer()
+{
+	if (MPIUtils::get_local_rank() == 0) {
+		MetaWriter writer;
+		writer.open("test_meta", "test");
+		writer.add_mesh_path(0, 0, "test_serial");
+		writer.add_data_path(0, 0, "test_serial_data");
+		writer.add_group_path(0, 0, "test_serial_group");
+	}
+
+	return true;
+}
+
 bool test_meta_reader()
 {
 	if (MPIUtils::get_local_rank() == 0) {
 		MetaReader reader;
-		reader.open("test_meta.x.json");
+		reader.open("test_meta");
 	}
 
 	return true;
@@ -483,6 +497,7 @@ int main(int argc, char **argv)
 	RUN_TEST(test_data_reader);
 	RUN_TEST(test_group_writer);
 	RUN_TEST(test_group_reader);
+	RUN_TEST(test_meta_writer);
 	RUN_TEST(test_meta_reader);
 	
 	/*

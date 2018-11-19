@@ -8,6 +8,7 @@ add_paraview_plugin(FEAIOReader "1.0"
 
    SOURCES ArrayHelpers.h
            ConnectivityHelpers.h
+           PVReaderStructs.h
 
    REQUIRED_ON_SERVER)
 
