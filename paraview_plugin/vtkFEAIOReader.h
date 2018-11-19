@@ -1,5 +1,6 @@
 #include "vtkMultiBlockDataSetAlgorithm.h"
 #include "vtkSmartPointer.h"
+#include "vtkIntArray.h"
 
 #include "PVReaderStructs.h"
 
@@ -12,6 +13,8 @@
 #include <map>
 #include <vector>
 
+class vtkCallbackCommand;
+class vtkDataArraySelection;
 class vtkUnstructuredGrid;
 class vtkPoints;
 
@@ -33,7 +36,7 @@ public:
 	const char* GetPartitionArrayName(int PartitionIndex);
 	int GetNumberOfPartitionArrays();
 	// Returns whether a partition is selected (returns 0/1 for a bool)
-	int GetPartitionArrayStatus(char* PartitionName);
+	int GetPartitionArrayStatus(const char* PartitionName);
 	// Method for XML PartitionStatus property
 	void SetPartitionStatus(char* PartitionName, int Status);
 	////////////////////////////////////////////////////////////////
@@ -44,7 +47,7 @@ public:
 	const char* GetComponentArrayName(int ComponentIndex);
 	int GetNumberOfComponentArrays();
 	// Returns whether a partition is selected (returns 0/1 for a bool)
-	int GetComponentArrayStatus(char* ComponentName);
+	int GetComponentArrayStatus(const char* ComponentName);
 	// Method for XML ComponentStatus property
 	void SetComponentStatus(char* ComponentName, int Status);
 	////////////////////////////////////////////////////////////////
@@ -55,7 +58,7 @@ public:
 	const char* GetPointArrayName(int PointArrayIndex);
 	int GetNumberOfPointArrays();
 	// Returns whether a point array is selected (returns 0/1 for a bool)
-	int GetPointArrayStatus(char* PointArrayName);
+	int GetPointArrayStatus(const char* PointArrayName);
 	// Method for XML PointArrayStatus property
 	void SetPointArrayStatus(char* PointArrayName, int Status);
 	////////////////////////////////////////////////////////////////
@@ -66,7 +69,7 @@ public:
 	const char* GetCellArrayName(int CellArrayIndex);
 	int GetNumberOfCellArrays();
 	// Returns whether a cell array is selected (returns 0/1 for a bool)
-	int GetCellArrayStatus(char* CellArrayName);
+	int GetCellArrayStatus(const char* CellArrayName);
 	// Method for XML CellArrayStatus property
 	void SetCellArrayStatus(char* CellArrayName, int Status);
 	///////////////////////////////////////////////////////////////
@@ -86,17 +89,36 @@ protected:
       vtkInformationVector**,
       vtkInformationVector*) VTK_OVERRIDE;
 
+   // Callback registered with the SelectionObserver.
+   static void SelectionModifiedCallback(vtkObject* caller,
+	   unsigned long eid,
+	   void* clientdata,
+	   void* calldata);
+
 protected:
 	typedef int32_t IndexType;
+	typedef vtkIntArray VTKIndexArrayType;
 	typedef double CoordType;
+
+
+	// Note: SetXZStatus gets called when a value is modified and apply is
+	// clicked.  How do we change the output?  Check if CurrOutput is non-zero
+	// then call an update call that checks what partitions, etc. and removes or
+	// adds as neccessary.
 
     char *FileName;
 	int Rank;
-
 	// Indicates if the meta file has been read to get the available data
 	bool MetaInfoRead;
-	// Indicates if the mesh is time dependent
+
+	// The output from the last RequestData callback
+	vtkInformationVector* CurrentOutputVector;
+	// The file path to the mesh for the current time step.
+	// If this is the same as a new timestep, then the data does not need to be reloaded.
 	std::string CurrentMeshPath;
+	// The current time
+	double CurrentTime;
+
 	// The time values that are available in the data
 	std::vector<double> TimestepValues;
 	// The partitioins needed based on the user's selections
@@ -106,18 +128,12 @@ protected:
 	std::vector<IndexType> ComponentsNeeded;
 
 	// Selection properties
-	// For Partition selection
-	std::vector<std::string> PartitionNames;
-	std::set<std::string> SelectedPartitions;
-	// For Component selection
-	std::vector<std::string> ComponentNames;
-	std::set<std::string> SelectedComponents;
-	// For PointArray selection
-	std::vector<std::string> PointArrayNames;
-	std::set<std::string> SelectedPointArrays;
-	// For CellArray selection
-	std::vector<std::string> CellArrayNames;
-	std::set<std::string> SelectedCellArrays;
+	vtkDataArraySelection* PartitionSelection;
+	vtkDataArraySelection* ComponentSelection;
+	vtkDataArraySelection* PointDataArraySelection;
+	vtkDataArraySelection* CellDataArraySelection;
+
+	vtkNew<vtkCallbackCommand> SelectionObserver;
 
 private:
 	vtkFEAIOReader(const vtkFEAIOReader&) = delete;
@@ -134,12 +150,19 @@ private:
 	/// in the data to the requested time.
 	double UpdateTime(vtkSmartPointer<vtkInformation>& outInfo,
 		vtkSmartPointer<vtkMultiBlockDataSet>& output);
+
+	/// After request data has been called, but a property of the reader (the GUI
+	/// check boxes) is changed, then this method is called and will update the
+	/// state of the output to reflect the changes to the requested data.
+	/// For now, just recreate all the data, but in the future, this could be
+	/// optimized to only do the modifications needed.
+	//void UpdateOutput();
 	
 	/// Given a partition, creates a VTK unstructured grid for a specified subcomponent
 	void CreateVTKMesh(
 		const fea_io::MeshInfo<IndexType, IndexType, CoordType>& meshInfo,
 		const fea_io::Partition<IndexType, IndexType, CoordType> &currPartition,
-		const IndexType subcomponentIndex,
+		const fea_io::Subcomponent<IndexType, CoordType>& subcomponent,
 		vtkSmartPointer<vtkUnstructuredGrid>& mesh);
 
 	void CreateBlocksForPartitionByComponent(vtkSmartPointer<vtkMultiBlockDataSet>& output,

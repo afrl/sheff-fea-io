@@ -1,5 +1,7 @@
 #include "vtkFEAIOReader.h"
 
+#include "vtkCallbackCommand.h"
+#include "vtkDataArraySelection.h"
 #include "vtkInformation.h"
 #include "vtkInformationVector.h"
 #include "vtkObjectFactory.h"
@@ -38,6 +40,41 @@
 #include <set>
 #include <unordered_set>
 
+// TODO move to a header
+template<typename PVType, typename IndexType, typename ValueType>
+PVType* CreatePartitionArrayForComponent(
+	const std::string& arrayName,
+	const int64_t numComps,
+	const std::vector<ValueType>& partitionValues,
+	const std::vector<IndexType>& subcomponentIndices)
+{
+	PVType* arr = PVType::New();
+	arr->SetName(arrayName.c_str());
+	arr->SetNumberOfComponents(numComps);
+	const int64_t numValues = static_cast<int64_t>(subcomponentIndices.size()) / numComps;
+	arr->SetNumberOfTuples(numValues);
+	for (auto i = 0; i < numValues; i++)
+		arr->SetTypedTuple(i, &partitionValues[numComps*subcomponentIndices[i]]);
+	return arr;
+}
+// TODO move to a header
+// Assigns every node or element to the same value
+template<typename PVType, typename IndexType, typename ValueType>
+PVType* CreatePartitionArrayForComponent(
+	const std::string& arrayName,
+	const ValueType& value,
+	const std::vector<IndexType>& subcomponentIndices)
+{
+	PVType* arr = PVType::New();
+	arr->SetName(arrayName.c_str());
+	arr->SetNumberOfComponents(1);
+	const int64_t numValues = static_cast<int64_t>(subcomponentIndices.size());
+	arr->SetNumberOfTuples(numValues);
+	for (auto i = 0; i < numValues; i++)
+		arr->SetTypedTuple(i, &value);
+	return arr;
+}
+
 vtkStandardNewMacro(vtkFEAIOReader);
 
 #define OUTPUT_DEBUG_MSG
@@ -58,156 +95,142 @@ void vtkFEAIOReader::PrintSelf(ostream & os, vtkIndent indent)
 const char * vtkFEAIOReader::GetPartitionArrayName(int PartitionIndex)
 {
 	ReadMetaInformation();
-	if (PartitionIndex >= this->PartitionNames.size())
-		return NULL;
-	else
-		return PartitionNames[PartitionIndex].c_str();
+	return this->PartitionSelection->GetArrayName(PartitionIndex);
 }
 
 int vtkFEAIOReader::GetNumberOfPartitionArrays()
 {
 	ReadMetaInformation();
-	return static_cast<int>(this->PartitionNames.size());
+	return this->PartitionSelection->GetNumberOfArrays();
 }
 
-int vtkFEAIOReader::GetPartitionArrayStatus(char * PartitionName)
+int vtkFEAIOReader::GetPartitionArrayStatus(const char * PartitionName)
 {
-	std::string PartStr(PartitionName);
-	if (this->SelectedPartitions.find(PartStr) != this->SelectedPartitions.end())
-		return 1;
-	else
-		return 0;
+	return this->PartitionSelection->ArrayIsEnabled(PartitionName);
 }
 
 void vtkFEAIOReader::SetPartitionStatus(char * PartitionName, int Status)
 {
-	std::string PartStr(PartitionName);
-	// Remove (not going to import)
-	if (Status == 0)
-		this->SelectedPartitions.erase(PartStr);
-	// Add
+	if (Status)
+		this->PartitionSelection->EnableArray(PartitionName);
 	else
-		this->SelectedPartitions.insert(PartStr);
+		this->PartitionSelection->DisableArray(PartitionName);
 }
 
 const char * vtkFEAIOReader::GetComponentArrayName(int ComponentIndex)
 {
 	ReadMetaInformation();
-	if (ComponentIndex >= this->ComponentNames.size())
-		return NULL;
-	else
-		return ComponentNames[ComponentIndex].c_str();
+	return this->ComponentSelection->GetArrayName(ComponentIndex);
 }
 
 int vtkFEAIOReader::GetNumberOfComponentArrays()
 {
 	ReadMetaInformation();
-	return static_cast<int>(this->ComponentNames.size());
+	return this->ComponentSelection->GetNumberOfArrays();
 }
 
-int vtkFEAIOReader::GetComponentArrayStatus(char * ComponentName)
+int vtkFEAIOReader::GetComponentArrayStatus(const char * ComponentName)
 {
-	std::string ComponentStr(ComponentName);
-	if (this->SelectedComponents.find(ComponentStr) != this->SelectedComponents.end())
-		return 1;
-	else
-		return 0;
+	return this->ComponentSelection->ArrayIsEnabled(ComponentName);
 }
 
 void vtkFEAIOReader::SetComponentStatus(char * ComponentName, int Status)
 {
-	std::string ComponentStr(ComponentName);
-	// Remove (not going to import)
-	if (Status == 0)
-		this->SelectedComponents.erase(ComponentStr);
-	// Add
+	if (Status)
+		this->ComponentSelection->EnableArray(ComponentName);
 	else
-		this->SelectedComponents.insert(ComponentStr);
+		this->ComponentSelection->DisableArray(ComponentName);
 }
 
 const char * vtkFEAIOReader::GetPointArrayName(int PointArrayIndex)
 {
 	ReadMetaInformation();
-	if (PointArrayIndex >= this->PointArrayNames.size())
-		return NULL;
-	else
-		return PointArrayNames[PointArrayIndex].c_str();
+	return this->PointDataArraySelection->GetArrayName(PointArrayIndex);
 }
 
 int vtkFEAIOReader::GetNumberOfPointArrays()
 {
 	ReadMetaInformation();
-	return static_cast<int>(this->PointArrayNames.size());
+	return this->PointDataArraySelection->GetNumberOfArrays();
 }
 
-int vtkFEAIOReader::GetPointArrayStatus(char * PointArrayName)
+int vtkFEAIOReader::GetPointArrayStatus(const char * PointArrayName)
 {
-	std::string StrName(PointArrayName);
-	if (this->SelectedPointArrays.find(StrName) != this->SelectedPointArrays.end())
-		return 1;
-	else
-		return 0;
+	return this->PointDataArraySelection->ArrayIsEnabled(PointArrayName);
 }
 
 void vtkFEAIOReader::SetPointArrayStatus(char * PointArrayName, int Status)
 {
-	std::string StrName(PointArrayName);
-	//PRINT_DEBUG_STR(std::string("Setting " + StrName + "(" + std::to_string(PointArrayIndex) + ") to " + std::to_string(Status)));
-	// Remove (not going to import)
-	if (Status == 0)
-		this->SelectedPointArrays.erase(StrName);
-	// Add
+	if (Status)
+		this->PointDataArraySelection->EnableArray(PointArrayName);
 	else
-		this->SelectedPointArrays.insert(StrName);
+		this->PointDataArraySelection->DisableArray(PointArrayName);
 }
 
 const char * vtkFEAIOReader::GetCellArrayName(int CellArrayIndex)
 {
 	ReadMetaInformation();
-	if (CellArrayIndex >= this->CellArrayNames.size())
-		return NULL;
-	else
-		return CellArrayNames[CellArrayIndex].c_str();
+	return this->CellDataArraySelection->GetArrayName(CellArrayIndex);
 }
 
 int vtkFEAIOReader::GetNumberOfCellArrays()
 {
 	ReadMetaInformation();
-	return static_cast<int>(this->CellArrayNames.size());
+	return this->CellDataArraySelection->GetNumberOfArrays();
 }
 
-int vtkFEAIOReader::GetCellArrayStatus(char * CellArrayName)
+int vtkFEAIOReader::GetCellArrayStatus(const char * CellArrayName)
 {
 	std::string StrName(CellArrayName);
-	if (this->SelectedCellArrays.find(StrName) != this->SelectedCellArrays.end())
-		return 1;
-	else
-		return 0;
+	return this->CellDataArraySelection->ArrayIsEnabled(CellArrayName);
 }
 
 void vtkFEAIOReader::SetCellArrayStatus(char * CellArrayName, int Status)
 {
-	std::string StrName(CellArrayName);
-	// Remove (not going to import)
-	if (Status == 0)
-		this->SelectedCellArrays.erase(StrName);
-	// Add
+	if (Status)
+		this->CellDataArraySelection->EnableArray(CellArrayName);
 	else
-		this->SelectedCellArrays.insert(StrName);
+		this->CellDataArraySelection->DisableArray(CellArrayName);
 }
 
 vtkFEAIOReader::vtkFEAIOReader()
     : vtkMultiBlockDataSetAlgorithm()
 {
 	MetaInfoRead = false;
-    this->FileName = 0;
+	CurrentOutputVector = nullptr;
+    this->FileName = nullptr;
 	this->Rank = 0;
     this->SetNumberOfInputPorts(0);
+
+	this->PartitionSelection = vtkDataArraySelection::New();
+	this->ComponentSelection = vtkDataArraySelection::New();
+	this->PointDataArraySelection = vtkDataArraySelection::New();
+	this->CellDataArraySelection = vtkDataArraySelection::New();
+
+	// Setup the selection callback to modify this object when an array
+	// selection is changed.
+	this->SelectionObserver->SetCallback(&vtkFEAIOReader::SelectionModifiedCallback);
+	this->SelectionObserver->SetClientData(this);
+	this->PartitionSelection->AddObserver(
+		vtkCommand::ModifiedEvent, this->SelectionObserver);
+	this->ComponentSelection->AddObserver(
+		vtkCommand::ModifiedEvent, this->SelectionObserver);
+	this->PointDataArraySelection->AddObserver(
+		vtkCommand::ModifiedEvent, this->SelectionObserver);
+	this->CellDataArraySelection->AddObserver(
+		vtkCommand::ModifiedEvent, this->SelectionObserver);
+	this->SetNumberOfInputPorts(0);
+	this->SetNumberOfOutputPorts(1);
 }
 
 vtkFEAIOReader::~vtkFEAIOReader()
 {
     this->SetFileName(0);
+}
+
+void vtkFEAIOReader::SelectionModifiedCallback(vtkObject * caller, unsigned long eid, void * clientdata, void * calldata)
+{
+	static_cast<vtkFEAIOReader*>(clientdata)->Modified();
 }
 
 int vtkFEAIOReader::RequestInformation(
@@ -250,6 +273,8 @@ int vtkFEAIOReader::RequestData(
 		return 1;
 	}
 
+	CurrentOutputVector = outputVector;
+
     // Get the info object
     vtkSmartPointer<vtkInformation> outInfo = outputVector->GetInformationObject(0);
 	this->UpdateMyPartitions(outInfo);
@@ -257,13 +282,9 @@ int vtkFEAIOReader::RequestData(
 
 	// For debug purposes, echo the active properties
 	if (this->Rank == 0) PRINT_DEBUG_STR(std::string("Request Data Called."));
-	PRINT_DEBUG_STR(std::string("Active Point Arrays:"));
-	for (auto i : this->SelectedPointArrays)
-		PRINT_DEBUG_STR(i);
 
     // Get the output
-    vtkSmartPointer<vtkMultiBlockDataSet> output =
-        vtkMultiBlockDataSet::SafeDownCast(outInfo->Get(vtkMultiBlockDataSet::DATA_OBJECT()));
+	vtkSmartPointer<vtkMultiBlockDataSet> output =  vtkMultiBlockDataSet::SafeDownCast(outInfo->Get(vtkMultiBlockDataSet::DATA_OBJECT()));
 
 	// Loop over the partitions and read the subcomponents to create the blocks of unstructured grids
 	// The tree organization:
@@ -273,21 +294,21 @@ int vtkFEAIOReader::RequestData(
 	// MulitPiece0 (in Block0)     MulitPieceN (in BlockN)  (each multipiece data set represents the partitions for the domain)
 	// |                      \
     // Piece0 (partition0) ...  PieceN (partitionN)
-	// UnstructuredGrid         UnstructuredGrid    (this level is the actual mesh for the partition i in material j)
+	// UnstructuredGrid         UnstructuredGrid    (this level is the actual mesh for the partition i in component j)
 	// Create the structure first
-	unsigned int domainBlockID = 0;
-	for (auto domainID : this->ComponentsNeeded)
+	unsigned int componentBlockID = 0;
+	for (auto componentID : this->ComponentsNeeded)
 	{
-		vtkSmartPointer<vtkMultiBlockDataSet> domainMultiBlock = vtkSmartPointer<vtkMultiBlockDataSet>::New();
-		domainMultiBlock->SetNumberOfBlocks(static_cast<int>(this->AllPartitionsNeeded.size()));
-		output->SetBlock(domainBlockID, domainMultiBlock);
-		std::string  domainBlockName = "Component " + std::to_string(domainID);
-		output->GetMetaData(domainBlockID)->Set(vtkCompositeDataSet::NAME(), domainBlockName.c_str());
-		domainBlockID++;
+		vtkSmartPointer<vtkMultiBlockDataSet> componentMultiBlock = vtkSmartPointer<vtkMultiBlockDataSet>::New();
+		componentMultiBlock->SetNumberOfBlocks(static_cast<int>(this->AllPartitionsNeeded.size()));
+		output->SetBlock(componentBlockID, componentMultiBlock);
+		std::string  componentBlockName = "Component " + std::to_string(componentID);
+		output->GetMetaData(componentBlockID)->Set(vtkCompositeDataSet::NAME(), componentBlockName.c_str());
+		componentBlockID++;
 	}
 
     // Get the time ID closet to the time requested
-	double time = UpdateTime(outInfo, output);
+	CurrentTime = UpdateTime(outInfo, output);
 
 #ifdef USE_TRY
     try {
@@ -299,50 +320,34 @@ int vtkFEAIOReader::RequestData(
 
         // Get the mesh for the current time step
 		// TODO use TimeDependentMesh boolean to know if we need to load a new mesh or if we can use the old one.
-		auto meshPath = metaReader.get_mesh_path_at_t(time);
+		auto meshPath = metaReader.get_mesh_path_at_t(CurrentTime);
 		fea_io::MeshReader<IndexType, IndexType, CoordType> meshReader(meshPath);
 		auto meshInfo = meshReader.get_mesh_info();
 		
 		// Get the types of arrays in all the data files for this time step and organize the types of data
-		auto dataPaths = metaReader.get_data_paths_at_t(time);
+		auto dataPaths = metaReader.get_data_paths_at_t(CurrentTime);
 		std::vector<std::unique_ptr<fea_io::DataReader>> dataReaderPtrs;
 		std::vector<ArrayReaderPair> arrayReaders;
 		for (auto& path : dataPaths) {
 			dataReaderPtrs.push_back(std::make_unique<fea_io::DataReader>(path));
 			auto& dataReader = *dataReaderPtrs.back();
 			auto arrayInfos = dataReader.get_array_infos();
-			for (auto arrayInfo : arrayInfos) {
-				if (this->SelectedPointArrays.find(arrayInfo.name) != this->SelectedPointArrays.end()) {
+			for (auto& arrayInfo : arrayInfos) {
+				if (this->GetPointArrayStatus(arrayInfo.name.c_str())) {
 					// Point data that does not need averaging
 					if (arrayInfo.type == fea_io::ArrayType::Node || arrayInfo.type == fea_io::ArrayType::NodeByComponent)
-						arrayReaders.push_back({
-								arrayInfo,
-								ArrayToVTKCategory::Point,
-								&dataReader
-							});
+						arrayReaders.push_back({ arrayInfo, ArrayToVTKCategory::Point, &dataReader });
 					// Point data that needs averaging, which need to be within domains
 					else if (arrayInfo.type == fea_io::ArrayType::NodeByElement)
-						arrayReaders.push_back({
-								arrayInfo,
-								ArrayToVTKCategory::PointAveraged,
-								&dataReader
-							});
+						arrayReaders.push_back({ arrayInfo, ArrayToVTKCategory::PointAveraged, &dataReader });
 				}
-				if (this->SelectedCellArrays.find(arrayInfo.name) != this->SelectedCellArrays.end()) {
+				if (this->GetCellArrayStatus(arrayInfo.name.c_str())) {
 					// Cell data that does not need averaging
 					if (arrayInfo.type == fea_io::ArrayType::Element)
-						arrayReaders.push_back({
-								arrayInfo,
-								ArrayToVTKCategory::Cell,
-								&dataReader
-							});
+						arrayReaders.push_back({ arrayInfo, ArrayToVTKCategory::Cell, &dataReader });
 					// Cell data that needs averaging
 					else if (arrayInfo.type == fea_io::ArrayType::QuadPointByElement)
-						arrayReaders.push_back({
-								arrayInfo,
-								ArrayToVTKCategory::CellAveraged,
-								&dataReader
-							});
+						arrayReaders.push_back({ arrayInfo, ArrayToVTKCategory::CellAveraged, &dataReader });
 				}
 			}
 		}
@@ -406,22 +411,26 @@ void vtkFEAIOReader::ReadMetaInformation()
 		// Get the mesh at the first time step to find the partition information
 		fea_io::MeshReader<IndexType, IndexType, CoordType> meshReader(metaReader.get_mesh_path_at_t(TimestepValues[0]));
 		auto partitionInfo = meshReader.get_partition_info();
-		for (auto part : partitionInfo)
-			this->PartitionNames.push_back(std::to_string(part.partition_id));
+		for (auto part : partitionInfo) {
+			auto partitionName = std::to_string(part.partition_id);
+			this->PartitionSelection->AddArray(partitionName.c_str(), true);
+		}
 		auto meshInfo = meshReader.get_mesh_info();
-		for (auto comp : meshInfo.components)
-			this->ComponentNames.push_back(std::to_string(comp.id));
+		for (auto comp : meshInfo.components) {
+			auto compName = std::to_string(comp.id);
+			this->ComponentSelection->AddArray(compName.c_str(), true);
+		}
 
 		// Add arrays that are not actually in the data, but might be wanted.
-		this->PointArrayNames.push_back("GlobalIDs");
-		this->PointArrayNames.push_back("PartitionIDs");
-		this->CellArrayNames.push_back("GlobalIDs");
-		this->CellArrayNames.push_back("PartitionIDs");
-		this->CellArrayNames.push_back("ComponentIDs");
-		this->CellArrayNames.push_back("LocalX");
-		this->CellArrayNames.push_back("LocalY");
-		this->CellArrayNames.push_back("LocalZ");
-
+		this->PointDataArraySelection->AddArray("GlobalIDs", false);
+		this->PointDataArraySelection->AddArray("PartitionIDs", false);
+		this->CellDataArraySelection->AddArray("GlobalIDs", false);
+		this->CellDataArraySelection->AddArray("PartitionIDs", false);
+		this->CellDataArraySelection->AddArray("ComponentIDs", true);
+		this->CellDataArraySelection->AddArray("LocalX", false);
+		this->CellDataArraySelection->AddArray("LocalY", false);
+		this->CellDataArraySelection->AddArray("LocalZ", false);
+		
 		// Get what data exists among all of the time steps
 		std::set<std::string> allPointArrays;
 		std::set<std::string> allCellArrays;
@@ -442,18 +451,9 @@ void vtkFEAIOReader::ReadMetaInformation()
 			}
 		}
 		for (auto& pointArrayName : allPointArrays)
-			this->PointArrayNames.push_back(pointArrayName);
+			this->PointDataArraySelection->AddArray(pointArrayName.c_str(), true);
 		for (auto& cellArrayName : allCellArrays)
-			this->CellArrayNames.push_back(cellArrayName);
-
-		// By default, mark all partitions and components as selected
-		for (auto option : this->PartitionNames) this->SelectedPartitions.insert(option);
-		for (auto option : this->ComponentNames) this->SelectedComponents.insert(option);
-		// By default, mark all the data in the data file as selected
-		for (auto option : allPointArrays) this->SelectedPointArrays.insert(option);
-		for (auto option : allCellArrays) this->SelectedCellArrays.insert(option);
-		// Mark component ID's since they are often useful
-		this->SelectedCellArrays.insert("ComponentIDs");
+			this->CellDataArraySelection->AddArray(cellArrayName.c_str(), true);
 
 #ifdef USE_TRY
 	}
@@ -480,8 +480,11 @@ void vtkFEAIOReader::UpdateMyPartitions(vtkSmartPointer<vtkInformation>& outInfo
 	// Get a vector of the PartIDs for the selected partitions
 	this->AllPartitionsNeeded.clear();
 	unsigned int partBlockID = 0;
-	for (auto partIDStr : this->SelectedPartitions)
-		this->AllPartitionsNeeded.push_back(atoi(partIDStr.c_str()));
+	for (auto i = 0; i < this->PartitionSelection->GetNumberOfArrays(); i++) {
+		auto name = this->PartitionSelection->GetArrayName(i);
+		if (this->PartitionSelection->ArrayIsEnabled(name))
+			this->AllPartitionsNeeded.push_back(atoi(name));
+	}
 
 	this->MyPartitionIndices.clear();
 	int nominalPartsPerPiece = static_cast<int>(this->AllPartitionsNeeded.size()) / numberOfPieces;
@@ -499,9 +502,10 @@ void vtkFEAIOReader::UpdateMyPartitions(vtkSmartPointer<vtkInformation>& outInfo
 void vtkFEAIOReader::UpdateComponents()
 {
 	this->ComponentsNeeded.clear();
-	for (auto domainIDStr : this->SelectedComponents) {
-		const int domainID = atoi(domainIDStr.c_str());
-		this->ComponentsNeeded.push_back(domainID);
+	for (auto i = 0; i < this->ComponentSelection->GetNumberOfArrays(); i++) {
+		auto name = this->ComponentSelection->GetArrayName(i);
+		if (this->ComponentSelection->ArrayIsEnabled(name))
+			this->ComponentsNeeded.push_back(atoi(name));
 	}
 }
 
@@ -528,13 +532,22 @@ double vtkFEAIOReader::UpdateTime(vtkSmartPointer<vtkInformation>& outInfo, vtkS
 	return 0;
 }
 
+/*
+void vtkFEAIOReader::UpdateOutput()
+{
+	if (CurrentOutputVector == nullptr)
+		return;
+
+	RequestData(nullptr, nullptr, CurrentOutputVector);
+}
+*/
+
 void vtkFEAIOReader::CreateVTKMesh(
 	const fea_io::MeshInfo<IndexType, IndexType, CoordType>& meshInfo,
-	const fea_io::Partition<IndexType, IndexType, CoordType> &currPartition,
-	const IndexType subcomponentIndex,
+	const fea_io::Partition<IndexType, IndexType, CoordType>& currPartition,
+	const fea_io::Subcomponent<IndexType, CoordType>& subcomponent,
 	vtkSmartPointer<vtkUnstructuredGrid>& mesh)
 {
-	auto& subcomponent = currPartition.subcomponents[subcomponentIndex];
 	const IndexType numPoints = static_cast<IndexType>(subcomponent.nodes_in_subcomponent.size());
 	const IndexType numCells = static_cast<IndexType>(subcomponent.elements_in_subcomponent.size());
 
@@ -626,66 +639,55 @@ void vtkFEAIOReader::CreateVTKMesh(
 
 void vtkFEAIOReader::CreateBlocksForPartitionByComponent(vtkSmartPointer<vtkMultiBlockDataSet>& output, const fea_io::MeshInfo<IndexType, IndexType, CoordType>& meshInfo, const fea_io::Partition<IndexType, IndexType, CoordType>& currPartition, const std::vector<ArrayReaderPair>& arrayPairs)
 {
-	/* TODO update
-	// Orientation data
-	std::vector< std::vector< std::array<double, 4> > > orientData;
-	if (orientReaderPtr != nullptr)
-		orientReaderPtr->read_part_orientation_data(partID, 0, orientData);
-	PRINT_DEBUG_STR("Orient Data Size for Partition " + std::to_string(partID) + ": " + std::to_string(orientData.size()));
-
 	// Create the meshes
-	unsigned int domainBlockID = 0;
-	for (auto domainID : this->ComponentsNeeded)
+	unsigned int componentBlockID = 0;
+	for (auto componentID : this->ComponentsNeeded)
 	{
-		// Figure out which elements and nodes are needed for this domain
-		std::vector<unsigned int> localNodeIndicesUsed;
-		std::vector<unsigned int> localElementIndicesUsed;
-		std::map<unsigned int, unsigned int> nodeOldLocalToNewLocalMap;
-		this->GetLocalIndicesNeededForComponent(partID, domainID, // input
-			nodeInfo, elementInfo, // input
-			nodeOldLocalToNewLocalMap, // output
-			localNodeIndicesUsed, localElementIndicesUsed); // output
+		// Find the subcomponent of the current component in the current partition
+		auto find_iter = std::find_if(currPartition.subcomponents.begin(),
+			currPartition.subcomponents.end(),
+			[&componentID](const fea_io::Subcomponent<IndexType, CoordType>& subcomp) -> bool { return subcomp.component_id == componentID; });
+		// If the component does not have a subcomponent on this partition, then move on to the next component
+		if (find_iter == currPartition.subcomponents.end())
+			continue;
+		auto& subcomponent = *find_iter;
 
-															// Create the VTK UnstructuredGrid container and fill it
+		// Create the VTK UnstructuredGrid container and fill it
 		vtkSmartPointer<vtkUnstructuredGrid> mesh = vtkSmartPointer<vtkUnstructuredGrid>::New();
-		this->CreateVTKMesh(partID, // input
-			nodeInfo, elementInfo, // input
-			nodeOldLocalToNewLocalMap, // input
-			localNodeIndicesUsed, localElementIndicesUsed, // input
-			mesh); // output
+		this->CreateVTKMesh(meshInfo, currPartition, subcomponent, mesh);
 
 		// Insert the mesh into the multiblock container
-		auto domainMultiBlock = vtkMultiBlockDataSet::SafeDownCast(output->GetBlock(domainBlockID));
-		domainMultiBlock->SetBlock(partitionIndex, mesh);
-		std::string ugridName = "Component" + std::to_string(domainID) + "Part" + std::to_string(partID);
-		domainMultiBlock->GetMetaData(partitionIndex)->Set(vtkCompositeDataSet::NAME(), ugridName);
+		auto componentMultiBlock = vtkMultiBlockDataSet::SafeDownCast(output->GetBlock(componentBlockID));
+		componentMultiBlock->SetBlock(currPartition.partition_id, mesh);
+		std::string ugridName = "Component" + std::to_string(componentID) + "Part" + std::to_string(currPartition.partition_id);
+		componentMultiBlock->GetMetaData(currPartition.partition_id)->Set(vtkCompositeDataSet::NAME(), ugridName);
 
 		// Create point array for global numbers
-		if (this->SelectedPointArrays.find("GlobalIDs") != this->SelectedPointArrays.end())
+		if (this->PointDataArraySelection->ArrayIsEnabled("GlobalIDs"))
 			mesh->GetPointData()->AddArray(
-				CreateSingleArray<vtkLongArray>("PointGlobalIDs", nodeInfo.nodeIndices, localNodeIndicesUsed));
-
+				CreatePartitionArrayForComponent<VTKIndexArrayType>("PointGlobalIDs", 1, currPartition.node_global_ids, subcomponent.nodes_in_subcomponent));
+		
 		// Create point array for owning partition
-		if (this->SelectedPointArrays.find("PartitionIDs") != this->SelectedPointArrays.end())
+		if (this->PointDataArraySelection->ArrayIsEnabled("PartitionIDs"))
 			mesh->GetPointData()->AddArray(
-				CreateSingleArray<vtkShortArray>("PointPartitionIDs", nodeInfo.partitions, localNodeIndicesUsed));
+				CreatePartitionArrayForComponent<VTKIndexArrayType>("PointPartitionIDs", 1, currPartition.node_parent_partitions, subcomponent.nodes_in_subcomponent));
 
 		// Create cell array for global numbers
-		if (this->SelectedCellArrays.find("GlobalIDs") != this->SelectedCellArrays.end())
+		if (this->CellDataArraySelection->ArrayIsEnabled("GlobalIDs"))
 			mesh->GetCellData()->AddArray(
-				CreateSingleArray<vtkLongArray>("CellGlobalIDs", elementInfo.globalIndices, localElementIndicesUsed));
+				CreatePartitionArrayForComponent<VTKIndexArrayType>("CellGlobalIDs", 1, currPartition.element_global_ids, subcomponent.elements_in_subcomponent));
 
 		// Create cell array for owning partition
-		if (this->SelectedCellArrays.find("PartitionIDs") != this->SelectedCellArrays.end())
+		if (this->CellDataArraySelection->ArrayIsEnabled("PartitionIDs"))
 			mesh->GetCellData()->AddArray(
-				CreateSingleArray<vtkShortArray>("CellPartitionIDs", elementInfo.partitions, localElementIndicesUsed));
+				CreatePartitionArrayForComponent<VTKIndexArrayType>("CellPartitionIDs", 1, currPartition.element_parent_partitions, subcomponent.elements_in_subcomponent));
 
 		// Create cell array for domain
-		if (this->SelectedCellArrays.find("ComponentIDs") != this->SelectedCellArrays.end())
+		if (this->CellDataArraySelection->ArrayIsEnabled("ComponentIDs"))
 			mesh->GetCellData()->AddArray(
-				CreateSingleArray<vtkShortArray>("CellComponentIDs", elementInfo.domains, localElementIndicesUsed));
+				CreatePartitionArrayForComponent<VTKIndexArrayType>("CellComponentIDs", subcomponent.component_id, subcomponent.elements_in_subcomponent));
 
-
+		/*
 		// Create cell array for local X vector
 		bool needX = this->SelectedCellArrays.find("LocalX") != this->SelectedCellArrays.end() && orientData.size() > 0;
 		bool needY = this->SelectedCellArrays.find("LocalY") != this->SelectedCellArrays.end() && orientData.size() > 0;
@@ -695,12 +697,14 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(vtkSmartPointer<vtkMult
 				nodeOldLocalToNewLocalMap, localNodeIndicesUsed, localElementIndicesUsed,
 				elementInfo, needX, needY, needZ,
 				mesh);
+				*/
 
-		domainBlockID++;
+		componentBlockID++;
 	} // End loop over domains
 
-	  // We don't need orientation data any more
-	orientData.clear();
+
+
+	/*
 
 	// Nodal data
 	std::vector<std::vector<std::vector<double>>> nodalData;

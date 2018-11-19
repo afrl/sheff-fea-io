@@ -4,7 +4,9 @@
 #include <vector>
 
 template<typename PVType, typename ValueType>
-PVType* CreateSingleArray(const std::string& arrayName,
+PVType* CreateSingleArray(
+	const std::string& arrayName,
+	const int numComps,
 	const std::vector<ValueType>& values,
 	const std::vector<unsigned int>& localIndicesUsed)
 {

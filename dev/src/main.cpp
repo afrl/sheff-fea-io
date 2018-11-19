@@ -467,7 +467,7 @@ int main(int argc, char **argv)
 		std::cout << "Please input a number: " << std::endl;
 		std::cin >> temp;
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPIUtils::barrier();
 
 	RUN_TEST(test_gather_vectors_int);
 	RUN_TEST(test_mesh_writer_serial);

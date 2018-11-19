@@ -2,7 +2,9 @@
 
 #include "fea_io/data/DataStructs.h"
 
-class fea_io::DataReader;
+namespace fea_io {
+	class DataReader;
+}
 
 enum class ArrayToVTKCategory
 {
