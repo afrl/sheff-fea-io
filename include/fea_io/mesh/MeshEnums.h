@@ -155,7 +155,6 @@ namespace fea_io
 
 	enum class ConnectivityScheme : char
 	{
-		Beta,
-		BSAMcc
+		FlexMesh
 	};
 }

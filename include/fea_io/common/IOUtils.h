@@ -15,7 +15,7 @@ namespace fea_io
 	class IOUtils
 	{
 	public:
-		
+
 		// Write methods
 
 		/// Writes a fundamental type to a binary file a the current stream position
@@ -79,18 +79,21 @@ namespace fea_io
 	template<typename T, int Size, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline void IOUtils::binary_write(std::ofstream & out, const std::array<T, Size>& val)
 	{
+		if (Size == 0) return;
 		out.write(reinterpret_cast<const char*>(&val[0]), static_cast<std::streamsize>(Size * sizeof(T)));
 	}
 
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline void IOUtils::binary_write(std::ofstream & out, const std::vector<T>& v)
 	{
+		if (v.size() == 0) return;
 		out.write(reinterpret_cast<const char*>(&v[0]), static_cast<std::streamsize>(v.size() * sizeof(T)));
 	}
 
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline void IOUtils::binary_write(std::ofstream & out, T * arr, const std::streamsize size)
 	{
+		if (size == 0) return;
 		out.write(reinterpret_cast<const char*>(&arr[0]), size * sizeof(T));
 	}
 

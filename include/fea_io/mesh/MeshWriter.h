@@ -79,7 +79,14 @@ namespace fea_io
 		///   must be the same size
 		virtual void write_partition(const PartitionType& partition);
 
-		/// Close the binary file, writes the JSON file, and resets the MeshWriter object. 
+		/// Writes a partition using iterators
+		template<typename NodeIterator, typename ElementIterator>
+		void write_partition(LocalIndex partition_id,
+			NodeIterator nodes_begin, const NodeIterator nodes_end,
+			ElementIterator elements_begin, const ElementIterator elements_end,
+			std::vector<Subcomponent<LocalIndex, CoordType>> subcomponents);
+
+		/// Close the binary file, writes the JSON file, and resets the MeshWriter object.
 		/// Note: this gets call with the destructor, so you don't have to call it unless
 		/// you want to force it to up the files.
 		virtual void close();
@@ -241,13 +248,13 @@ namespace fea_io
 		// Write the high-level information about the partition
 		IOUtils::binary_write(out_stream_, partition.partition_id);
 		// Write the node information
-		for (auto i = 0; i < static_cast<GlobalIndex>(partition.node_global_ids.size()); i++) {
+		for (GlobalIndex i = 0; i < static_cast<GlobalIndex>(partition.node_global_ids.size()); i++) {
 			IOUtils::binary_write(out_stream_, partition.node_global_ids[i]);
 			IOUtils::binary_write(out_stream_, partition.node_parent_partitions[i]);
 			IOUtils::binary_write(out_stream_, &partition.node_coords[meta_info_.dimensionality*i], meta_info_.dimensionality);
 		}
 		// Write the element information
-		for (auto i = 0; i < static_cast<GlobalIndex>(partition.element_global_ids.size()); i++) {
+		for (GlobalIndex i = 0; i < static_cast<GlobalIndex>(partition.element_global_ids.size()); i++) {
 			IOUtils::binary_write(out_stream_, partition.element_global_ids[i]);
 			IOUtils::binary_write(out_stream_, partition.element_parent_partitions[i]);
 			IOUtils::binary_write(out_stream_, static_cast<std::underlying_type<ElementType>::type>(partition.element_types[i]));
@@ -281,8 +288,8 @@ namespace fea_io
 	inline Extent<CoordType> MeshWriter<GlobalIndex, LocalIndex, CoordType>::calculate_extent(const std::vector<CoordType> node_coords, const LocalIndex dimensionality)
 	{
 		Extent<CoordType> extent;
-		for (auto i = 0; i < static_cast<GlobalIndex>(node_coords.size()) / dimensionality; i++) {
-			for (auto j = 0; j < dimensionality; j++) {
+		for (GlobalIndex i = 0; i < static_cast<GlobalIndex>(node_coords.size()) / dimensionality; i++) {
+			for (LocalIndex j = 0; j < dimensionality; j++) {
 				const GlobalIndex node_i = dimensionality * i + j;
 				if (extent.min[j] > node_coords[node_i])
 					extent.min[j] = node_coords[node_i];
@@ -353,5 +360,13 @@ namespace fea_io
 	{
 		write_state_ = WriteState::WritePhase;
 		out_stream_.open(file_path_ + binary_ext, std::ios::binary | std::fstream::out);
+	}
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	template<typename NodeIterator, typename ElementIterator>
+	inline void MeshWriter<GlobalIndex, LocalIndex, CoordType>::write_partition(LocalIndex partition_id, NodeIterator nodes_begin, const NodeIterator nodes_end, ElementIterator elements_begin, const ElementIterator elements_end, std::vector<Subcomponent<LocalIndex, CoordType>> subcomponents)
+	{
+		// TODO implement writing with iterator adapters
+		throw _MSG_EXCEPT("TODO implement");
 	}
 }

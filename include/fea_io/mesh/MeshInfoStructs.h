@@ -118,7 +118,7 @@ namespace fea_io
 		j.at("y_max").get_to(e.y_max());
 		j.at("z_max").get_to(e.z_max());
 	}
-	
+
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	struct MeshInfo
@@ -127,10 +127,10 @@ namespace fea_io
 		GlobalIndex total_num_elements;
 		LocalIndex dimensionality;
 		Extent<CoordType> extent;
+		ConnectivityScheme connectivity_scheme;
 		std::vector<ComponentInfo<LocalIndex>> components;
 		LocalIndex total_num_partitions;
 		std::vector<std::streamoff> partition_offsets;
-		ConnectivityScheme connectivity_scheme;
 
 		auto tie() const {
 			return std::tie(total_num_nodes,
@@ -216,6 +216,8 @@ namespace fea_io
 			num_lcs_parameters = num_elements_in_subcomponent * get_num_parameters(lcs_parameterization);
 		else if (lcs_assignment == LCSAssignment::Node)
 			num_lcs_parameters = num_nodes_in_subcomponent * get_num_parameters(lcs_parameterization);
+		else if (lcs_assignment == LCSAssignment::None)
+			num_lcs_parameters = 0;
 		else
 			throw _MSG_EXCEPT("LCS assignment not recognized.");
 

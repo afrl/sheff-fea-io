@@ -2,7 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 #include <mpi.h>
 #endif
 
@@ -37,7 +37,7 @@ namespace fea_io
 
 		void reset() {
 			initialized = false;
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 			local_comm = MPI_COMM_NULL;
 #endif
 			global_rank = 0;
@@ -125,7 +125,7 @@ namespace fea_io
 
 	inline void fea_io::MPIUtils::init(int * argc, char *** argv, const int group_key, const bool quiet)
 	{
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 		MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// If the object has already been initialized, just return
@@ -147,10 +147,10 @@ namespace fea_io
 		// Get group handle for all_process_group from Comm_World
 		// Each process started by the mpiexec must make the split call
 		// Each program will have a "color" as it is called (called the
-		// group key in this context), which is an identifying integer. 
-		// Every process with the same "color" will be put in the same group. 
+		// group key in this context), which is an identifying integer.
+		// Every process with the same "color" will be put in the same group.
 		// As a result, each program can have its own communicator.
-		// Ordering will be 
+		// Ordering will be
 		state.local_group_key = group_key;
 		MPI_Comm_split(MPI_COMM_WORLD, group_key, state.global_rank, &state.local_comm);
 
@@ -205,7 +205,7 @@ namespace fea_io
 
 	inline void MPIUtils::barrier(const bool use_local_comm)
 	{
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Select which comm to use for all MPI operations in this call
@@ -217,7 +217,7 @@ namespace fea_io
 	template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type*>
 	inline void fea_io::MPIUtils::update_from_root(T & obj_on_this_proc, const bool use_local_comm)
 	{
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Select which comm to use for all MPI operations in this call
@@ -258,7 +258,7 @@ namespace fea_io
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline static std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
 	{
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Select which comm to use for all MPI operations in this call
@@ -280,7 +280,7 @@ namespace fea_io
 				&num_values_for_each_proc[0], 1, MPI_INT,
 				0, comm);
 
-			// Compute the number of bytes to expect from each rank and 
+			// Compute the number of bytes to expect from each rank and
 			// the offset in the buffer for each rank.
 			std::vector<int> recv_counts(comm_size);
 			std::vector<int> recv_offsets(comm_size + 1);
@@ -328,7 +328,7 @@ namespace fea_io
 	template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type*>
 	inline static std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
 	{
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Select which comm to use for all MPI operations in this call
@@ -388,7 +388,7 @@ namespace fea_io
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline void MPIUtils::send_to_group(const std::vector<T> data, int target_group_key)
 	{
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Only let the local root send information
@@ -404,7 +404,7 @@ namespace fea_io
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
 	inline void MPIUtils::receive_from_group(std::vector<T>& data, int target_group_key)
 	{
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 
 		// Only let the local root send information
@@ -428,7 +428,7 @@ namespace fea_io
 
 	inline const int MPIUtils::get_num_local_ranks()
 	{
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
 		int comm_size;
 		MPI_Comm_size(state.local_comm, &comm_size);
@@ -440,7 +440,7 @@ namespace fea_io
 
 	inline void MPIUtils::finalize()
 	{
-#ifdef HAVE_MPI
+#ifdef USE_MPI
 		MPIUtilsState& state = fea_io::MPIUtils::get_state();
 		state.reset();
 
