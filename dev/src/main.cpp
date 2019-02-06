@@ -120,6 +120,7 @@ void get_test_info(MeshInfo<int16_t, int16_t, float>& meta_info, std::vector<Par
 		4,
 		2,
 		{ {0, 0, 0}, {1, 1, 0} },
+		ConnectivityScheme::FlexMesh,
 		{ { 0, "Component0", LCSAssignment::Component, LCSParameterization::Quaternion },
 		  { 1, "Component1", LCSAssignment::Element, LCSParameterization::Quaternion } },
 		2,
