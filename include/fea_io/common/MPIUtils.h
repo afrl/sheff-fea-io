@@ -256,7 +256,7 @@ namespace fea_io
 	}
 
 	template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
-	inline static std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
+	inline std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
 	{
 #ifdef USE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
@@ -326,7 +326,7 @@ namespace fea_io
 	}
 
 	template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type*>
-	inline static std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
+	inline std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
 	{
 #ifdef USE_MPI
 		const MPIUtilsState& state = fea_io::MPIUtils::get_state();

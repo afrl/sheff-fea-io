@@ -204,7 +204,7 @@ namespace fea_io
 	template<typename DataType>
 	inline void fea_io::GroupWriter::write(const std::string group_name, const int64_t partition_id, const std::string array_name, const DataType ** data, const int64_t num_values)
 	{
-		auto find_iter = group_infos_.find(group_name);
+		auto find_iter = group_name_to_id_map_.find(group_name);
 		if (find_iter == group_name_to_id_map_.end())
 			throw _MSG_EXCEPT_C("Group " + group_name + " does not exist in the list of groups indicated by the JSON file.");
 		GroupInfo& group_info = group_infos_[find_iter->second];

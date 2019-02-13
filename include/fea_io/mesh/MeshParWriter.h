@@ -166,9 +166,9 @@ namespace fea_io
 		// If the extent was not calculated when the partition info was queued, then
 		// calculate it now.
 		if (partition_info.extent.is_limit())
-			partition_info.extent = calculate_extent(partition.node_coords, meta_info_.dimensionality);
+			partition_info.extent = Parent::calculate_extent(partition.node_coords, Parent::meta_info_.dimensionality);
 
-		update_subcomponent_offsets(partition_info);
+		Parent::update_subcomponent_offsets(partition_info);
 
 		auto expected_size = std::find_if(Parent::partition_infos_.begin(), Parent::partition_infos_.end(),
 			[id = partition.partition_id](const PartitionInfo<GlobalIndex, LocalIndex, CoordType>& x) -> bool {
@@ -183,7 +183,7 @@ namespace fea_io
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	inline void MeshParWriter<GlobalIndex, LocalIndex, CoordType>::close()
 	{
-		out_stream_.close();
+		Parent::out_stream_.close();
 
 		// Only rank 0 should write the JSON file
 		if (MPIUtils::get_local_rank() == 0) {
@@ -191,9 +191,9 @@ namespace fea_io
 			// to calculate the appropriate offsets.
 			auto all_partition_info = MPIUtils::gather_vectors(Parent::partition_infos_);
 
-			std::ofstream json_component(file_path_ + Parent::json_ext);
+			std::ofstream json_component(Parent::file_path_ + Parent::json_ext);
 			json j;
-			j["meta_info"] = meta_info_;
+			j["meta_info"] = Parent::meta_info_;
 			j["partition_info"] = all_partition_info;
 			DataTypeSizes data_types;
 			data_types.deduce<GlobalIndex, LocalIndex, CoordType>();
@@ -203,7 +203,7 @@ namespace fea_io
 		}
 
 		
-		write_state_ = WriteState::Finalized;
+		Parent::write_state_ = WriteState::Finalized;
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
