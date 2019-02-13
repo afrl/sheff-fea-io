@@ -104,26 +104,26 @@ endif()
 ################
 
 include(GNUInstallDirs)
-set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/FEAIO)
+set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/FeaIo)
 
 # Install the header files
 install(DIRECTORY ${FEAIO_INCLUDE}/
 	DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-# This is required so that the exported target has the name FEAIO and not feaio
-set_target_properties(feaio PROPERTIES EXPORT_NAME FEAIO)
+# This is required so that the exported target has the name FeaIo and not feaio
+set_target_properties(feaio PROPERTIES EXPORT_NAME FeaIo)
 
 # Create a ConfigVersion.cmake file
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
-	${CMAKE_CURRENT_BINARY_DIR}/FEAIOConfigVersion.cmake
+	${CMAKE_CURRENT_BINARY_DIR}/FeaIoConfigVersion.cmake
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
 
-# Create the package config file for find_package(FEAIO)
+# Create the package config file for find_package(FeaIo)
 configure_package_config_file(
-	${CMAKE_CURRENT_LIST_DIR}/cmake/FEAIOConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/FEAIOConfig.cmake
+	${CMAKE_CURRENT_LIST_DIR}/cmake/FeaIoConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/FeaIoConfig.cmake
     INSTALL_DESTINATION ${INSTALL_CONFIGDIR}
 )
 
@@ -131,9 +131,9 @@ configure_package_config_file(
 # Note: if you write custom find modules, add them here
 # Refer to https://github.com/pabloariasal/modern-cmake-sample/blob/cfda7b51ff915409fd61d4f2e75b63032bedb182/libjsonutils/CMakeLists.txt
 install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/FEAIOConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/FEAIOConfigVersion.cmake
-	${CMAKE_CURRENT_BINARY_DIR}/FEAIOTargets.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/FeaIoConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/FeaIoConfigVersion.cmake
+	${CMAKE_CURRENT_BINARY_DIR}/FeaIoTargets.cmake
     DESTINATION ${INSTALL_CONFIGDIR}
 )
 
@@ -144,9 +144,9 @@ install(FILES
 # Export just the feaio target (not the dev, tests, ParaViewReader, etc.)
 export(
     TARGETS feaio
-	FILE ${CMAKE_CURRENT_BINARY_DIR}/FEAIOTargets.cmake
-    NAMESPACE FEAIO::
+	FILE ${CMAKE_CURRENT_BINARY_DIR}/FeaIoTargets.cmake
+    NAMESPACE FeaIo::
 )
 
 # Register package in user's package registry
-export(PACKAGE FEAIO)
+export(PACKAGE FeaIo)
