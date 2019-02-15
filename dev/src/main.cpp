@@ -3,7 +3,6 @@
 #include <iomanip>
 
 #include "fea_io/common/Comparators.h"
-#include "fea_io/common/MPIUtils.h"
 #include "fea_io/data/DataReader.h"
 #include "fea_io/data/DataWriter.h"
 #include "fea_io/group/GroupReader.h"
