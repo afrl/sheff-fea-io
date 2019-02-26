@@ -11,3 +11,4 @@
 *.json
 build/*
 install_dir/*
+*.GENERATED.*
