@@ -60,6 +60,7 @@ Configuration:
   --make-tests=ON      turn on unit testing
   --make-dev=ON        turn on development project (a rapid protyping project intended for
                        devs to use while creating new tests)
+  --make-paraview=OFF  build ParaView Reader (TODO)
   --generator=VS15     CMake generator to use. Default is `VS15` (Visual Studio 15 2017 Win64)
                        for windows and `make` (Unix Makefiles) for linux 
   --print              for debugging only: print the config/build command that will be executed
@@ -76,6 +77,7 @@ class options:
     self.use_mpi = "ON"
     self.make_tests = "ON"
     self.make_dev = "ON"
+    self.make_paraview = "OFF"
     self.targets = []
     self.generator = "Visual Studio 15 2017 Win64" 
     self.build_type = "Debug"
@@ -91,7 +93,7 @@ def process_args():
   # First, parse the options
   try:
     opts, args = getopt.gnu_getopt(sys.argv[1:], "h", ["help", "log", "release", "debug", "dir=",
-    "use-mpi=", "make-tests=", "make-dev=", "generator=", "print", "config", "build", "test", "doc", 
+    "use-mpi=", "make-tests=", "make-dev=", "make-paraview=", "generator=", "print", "config", "build", "test", "doc", 
     "clear-cache", "clean"])
 
   except getopt.GetoptError:
@@ -122,11 +124,14 @@ def process_args():
       if a in ("OFF", "0"):
         user_opts.use_mpi="OFF"
     if o in ("--make-tests"):
-      if a in ("OFF", "1"):
+      if a in ("OFF", "0"):
         user_opts.make_tests="OFF"
     if o in ("--make-dev"):
       if a in ("OFF", "0"):
         user_opts.make_dev="OFF"
+    if o in ("--make-paraview"):
+      if a in ("ON", "1"):
+        user_opts.make_paraview="ON"
     if o in ("--generator"):
       if a in ("codeblocks"):
         user_opts.generator = "CodeBlocks - Unix Makefiles"
@@ -203,7 +208,9 @@ def main():
 
     cmake_flags = (" -DCMAKE_BUILD_TYPE=" + opts.build_type + 
                    " -DFEAIO_BuildDev:BOOL=" + opts.make_dev +
-                   " -DFEAIO_BuildTests:BOOL=" + opts.make_tests)
+                   " -DFEAIO_BuildTests:BOOL=" + opts.make_tests +
+                   " -DFEAIO_USE_MPI:BOOL=" + opts.use_mpi +
+                   " -DFEAIO_BuildParaViewReader:BOOL=" + opts.make_paraview)
 
     print_color("Configuring------------FeaIo", "blue")
     cmd = (pipefail + 'cmake -G"' + opts.generator + '" ' + 
