@@ -65,12 +65,14 @@ target_include_directories(feaio INTERFACE
 # downstream targets will have these headers in the VS project
 target_sources(feaio INTERFACE ${FEAIO_HEADER_LIST})
 # Add an alias so that a library can be used inside the build tree, eg when testing
-add_library(FEAIO::FEAIO ALIAS feaio)
+add_library(FeaIo::FeaIo ALIAS feaio)
 # Add C++ 14 flag (at interface level since this is a header-only
 # library and downstream executables will also need the flag)
 target_compile_features(feaio INTERFACE cxx_std_14)
-#target_link_libraries(std::experimental::filesystem INTERFACE -lstdc++fs)
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lstdc++fs")
+# Add flag to link with experimental/filesystem if GNU. This requires GCC >= 6.
+if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+    target_link_libraries(fea_io libstdc++fs.a)
+endif()
 
 # Link dependencies
 target_link_libraries(feaio INTERFACE nlohmann_json::nlohmann_json)
@@ -96,10 +98,10 @@ if(FEAIO_BuildParaViewReader)
 endif()
 
 # Build tests
-#include(CTest)
 if(FEAIO_BuildTests)
+	include(CTest)
 	enable_testing()
-	add_subdirectory(test)
+	add_subdirectory(unit_tests)
 endif()
 
 ################

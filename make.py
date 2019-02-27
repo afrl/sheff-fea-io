@@ -156,12 +156,36 @@ def process_args():
 
   return user_opts
 
-
+def mod_for_os(cmd):
+  """Windows requires some modifications via the subprocess call since PowerShell is
+  required.  The subprocess will call cmd.exe, so we need to tell cmd to call powershell.
+  This function will take a cmd string and modify it for the particular operating system.
+  """
+  if (os.name == 'nt'):
+    cmd = cmd.replace('"', r'\"')
+    cmd = cmd.replace('tee', 'Tee-Object')
+    cmd = 'powershell "' + cmd + '"'
+  # Both config and build targets use the tee command so we can display to the screen 
+  # and save to a log simultaneously. The log is needed so that the top-level make
+  # knows when config/build has happened. If build was successful, log should contain 
+  # the line "Install the project...". Note that, at least on Linux, full color output 
+  # only works if you don't combine with tee. Ideally, we'd also like to send stderr to 
+  # tee, but this removes all color. Also, with tee we don't get the correct exit status 
+  # of config/build. In Linux, we can use `set -o pipefail` to catch the config/build 
+  # exit status instead of tee's. Alternatively, pass --log to ship to log file without
+  # using tee. 
+  elif (os.name == "posix"):
+    cmd = "set -o pipefail; " + cmd
+  return cmd
 
 def main():
   """ Main driver to execute desired target(s) """
   # Note: this script is not smart if multiple targets are chosen. It will execute them
   # in the same order, no matter the order provided. 
+
+  # Windows requires calling color first before any prints for commandline colors to work.
+  if (os.name == 'nt'):
+    os.system('color')
 
   opts = process_args()
 
@@ -177,19 +201,6 @@ def main():
 
     if (os.path.exists(opts.install_dir)):
       shutil.rmtree(opts.install_dir)
-
-  # Both config and build targets use the tee command so we can display to the screen 
-  # and save to a log simultaneously. The log is needed so that the top-level make
-  # knows when config/build has happened. If build was successful, log should contain 
-  # the line "Install the project...". Note that, at least on Linux, full color output 
-  # only works if you don't combine with tee. Ideally, we'd also like to send stderr to 
-  # tee, but this removes all color. Also, with tee we don't get the correct exit status 
-  # of config/build. In Linux, we can use `set -o pipefail` to catch the config/build 
-  # exit status instead of tee's. Alternatively, pass --log to ship to log file without
-  # using tee. 
-  pipefail = ""
-  if (os.name == "posix"):
-    pipefail = "set -o pipefail; "
 
   config_flag = 0
   if ("config" in opts.targets): 
@@ -213,7 +224,7 @@ def main():
                    " -DFEAIO_BuildParaViewReader:BOOL=" + opts.make_paraview)
 
     print_color("Configuring------------FeaIo", "blue")
-    cmd = (pipefail + 'cmake -G"' + opts.generator + '" ' + 
+    cmd = mod_for_os('cmake -G"' + opts.generator + '" ' + 
         '-DCMAKE_INSTALL_PREFIX:PATH="' + opts.install_dir + '" ' + 
         cmake_flags + " .. " + log)
 
@@ -243,7 +254,7 @@ def main():
         log = " > build.log 2>&1"
 
       print_color("Building---------------FeaIo", "blue")
-      cmd = pipefail + 'cmake --build . --target install' + log
+      cmd = mod_for_os('cmake --build . --target install' + log)
 
       if (opts.print_cmd):
         print_color(cmd, "cyan")
@@ -266,7 +277,7 @@ def main():
         log = " > test.log 2>&1"
 
       print_color("Testing----------------FeaIo", "blue")
-      cmd = pipefail + 'ctest' + log
+      cmd = mod_for_os('ctest -C ' + opts.build_type + log)
 
       if (opts.print_cmd):
         print_color(cmd, "cyan")

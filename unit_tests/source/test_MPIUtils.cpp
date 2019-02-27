@@ -2,9 +2,10 @@
 #include <iostream>
 #include <iomanip>
 
-#include "MeshParWriter.h"
-#include "MeshReader.h"
-#include "MPIUtils.h"
+#include "fea_io/mesh/MeshParWriter.h"
+#include "fea_io/mesh/MeshReader.h"
+#include "fea_io/mesh/MeshInfoStructs.h"
+#include "fea_io/common/MPIUtils.h"
 
 using json = nlohmann::json;
 using namespace fea_io;
@@ -64,13 +65,14 @@ bool test_gather_vectors_int()
 		return true;
 }
 
-void get_test_subdomain_info(MeshMetaInfo<int16_t, int16_t, float>& meta_info, std::vector<PartitionInfo<int16_t, int16_t, float>>& partitions)
+void get_test_subdomain_info(MeshInfo<int16_t, int16_t, float>& meta_info, std::vector<PartitionInfo<int16_t, int16_t, float>>& partitions)
 {
 	meta_info = {
 		9,
 		4,
 		2,
 		{ {0, 0, 0}, {1, 1, 0} },
+		ConnectivityScheme::FlexMesh,
 		{ { 0, "Component0", LCSAssignment::Component, LCSParameterization::Quaternion },
 		  { 1, "Component1", LCSAssignment::Element, LCSParameterization::Quaternion } },
 		2,
@@ -149,7 +151,7 @@ auto get_part1()
 bool test_mesh_writer_serial()
 {
 	if (MPIUtils::get_local_rank() == 0) {
-		MeshMetaInfo<int16_t, int16_t, float> meta_info;
+		MeshInfo<int16_t, int16_t, float> meta_info;
 		std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
 		get_test_subdomain_info(meta_info, all_partitions);
 
@@ -165,7 +167,7 @@ bool test_mesh_writer_serial()
 
 bool test_mesh_writer_parallel()
 {
-	MeshMetaInfo<int16_t, int16_t, float> meta_info;
+	MeshInfo<int16_t, int16_t, float> meta_info;
 	std::vector<PartitionInfo<int16_t, int16_t, float>> all_partitions;
 	get_test_subdomain_info(meta_info, all_partitions);
 
