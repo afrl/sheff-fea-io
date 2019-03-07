@@ -8,6 +8,9 @@ option(FEAIO_BuildDev "Build the main.cpp in the dev folder. (intended for debug
 option(FEAIO_BuildParaViewReader "Build ParaView reader for the JSON-binary format supported by the FEAIO project. (Requires having build ParaView from source)" OFF)
 option(FEAIO_BuildTests "Build the unit tests." ON)
 option(FEAIO_USE_MPI "Indicates if the MPI routines should be included in the build. (Required for parallel writing)." OFF)
+option(FEAIO_HaveFilesystem "Use if compiler has included <experimental/filesystem>" ON) 
+
+message(STATUS "Configuring for ${CMAKE_GENERATOR}:\n   Mode: ${CMAKE_BUILD_TYPE}, Dev: ${FEAIO_BuildDev}, Test: ${FEAIO_BuildTests}, MPI: ${FEAIO_USE_MPI}, FS: ${FEAIO_HaveFilesystem}, ParaView: ${FEAIO_BuildParaViewReader}\n")
 
 ##################
 # Checking input #
@@ -69,9 +72,15 @@ add_library(FeaIo::FeaIo ALIAS feaio)
 # Add C++ 14 flag (at interface level since this is a header-only
 # library and downstream executables will also need the flag)
 target_compile_features(feaio INTERFACE cxx_std_14)
-# Add flag to link with experimental/filesystem if GNU. This requires GCC >= 6.
-if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-    target_link_libraries(feaio INTERFACE libstdc++fs.a)
+# Use filesystem if available
+if (FEAIO_HaveFilesystem)
+  add_definitions(-DHAVE_FILESYSTEM)
+  # Add flag to link with experimental/filesystem if GNU. This requires GCC >= 5.3.
+  if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+      target_link_libraries(feaio INTERFACE libstdc++fs.a)
+  endif()
+else()
+  remove_definitions(-DHAVE_FILESYSTEM)
 endif()
 
 # Link dependencies
