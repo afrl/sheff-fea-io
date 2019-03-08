@@ -10,7 +10,9 @@ option(FEAIO_BuildTests "Build the unit tests." ON)
 option(FEAIO_USE_MPI "Indicates if the MPI routines should be included in the build. (Required for parallel writing)." OFF)
 option(FEAIO_HaveFilesystem "Use if compiler has included <experimental/filesystem>" ON) 
 
-message(STATUS "Configuring for ${CMAKE_GENERATOR}:\n   Mode: ${CMAKE_BUILD_TYPE}, Dev: ${FEAIO_BuildDev}, Test: ${FEAIO_BuildTests}, MPI: ${FEAIO_USE_MPI}, FS: ${FEAIO_HaveFilesystem}, ParaView: ${FEAIO_BuildParaViewReader}\n")
+# For debugging, print generator, compiler, and options
+message(STATUS "Gen: ${CMAKE_GENERATOR}, CXX: ${CMAKE_CXX_COMPILER_ID}, Mode: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Dev: ${FEAIO_BuildDev}, Tests: ${FEAIO_BuildTests}, MPI: ${FEAIO_USE_MPI}, ParaView: ${FEAIO_BuildParaViewReader}, FS: ${FEAIO_HaveFilesystem}")
 
 ##################
 # Checking input #

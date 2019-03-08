@@ -9,6 +9,6 @@
 *..lastbuildstate
 *.bin
 *.json
-build/*
-install_dir/*
+build*
+install_dir*
 *.GENERATED.*
