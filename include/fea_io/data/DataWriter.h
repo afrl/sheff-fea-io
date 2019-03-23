@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <vector>
 #include <fstream>
+#include <iomanip>
 
 #include <nlohmann/json.hpp>
 
@@ -30,25 +31,38 @@ namespace fea_io
 		explicit DataWriter();
 		virtual ~DataWriter();
 
+        /// Initialize the data writer
+        /// Note: this signature requires all the partition info objects to be known
+        ///       by the caller.  However, in a distributed environment, this is not
+        ///       often the case.  Use the method below if all are not known to the caller.
 		void initialize(
-			const std::string file_path,
-			const MeshInfoType mesh_info,
-			const std::vector<PartitionInfoType> partition_info,
-			const std::vector<GlobalIndex> num_quad_points_in_partitions,
-			const std::vector<ArrayInfo> array_infos);
+			const std::string & file_path,
+			const MeshInfoType & mesh_info,
+			const std::vector<PartitionInfoType> & partition_info,
+			const std::vector<GlobalIndex> & num_quad_points_in_partitions,
+			const std::vector<ArrayInfo> & array_infos);
 
-		// Writes value for a single node, element, or quad-point
-		// Note: the order of node/element/quad-point(s) for which this method is
-		//       called should match the order in the mesh file.
-		//       It is up to the calling program to ensure the order is correct.
-		// Notes for different array types:
-		// - NodeByComponent: this method can be called once per a partition or once per
-		//		a subcomponent, but it is just important that the order of the subcomponents
-		//      (regardless of how you choose to call this method) are consistent with the MeshInfo
-		//      passed to initialize(...)
-		// - QuadPointByElem: this method should be called once per an element (or call write_quad
-		//      if you want to call one method for multiple elements.  Just be sure the ordering of
-		//      elements matches the order of elements in the partition.
+        /// Initialize the data writer
+        /// Note: This method will communicate the partition info to all the other ranks
+        void initialize(
+            const std::string & file_path,
+            const MeshInfoType & mesh_info,
+            const PartitionInfoType & partition_info,
+            const GlobalIndex & num_quad_points_in_partitions,
+            const std::vector<ArrayInfo> & array_info);
+
+		/// Writes value for a single node, element, or quad-point
+		/// Note: the order of node/element/quad-point(s) for which this method is
+		///       called should match the order in the mesh file.
+		///       It is up to the calling program to ensure the order is correct.
+		/// Notes for different array types:
+		/// - NodeByComponent: this method can be called once per a partition or once per
+		///		a subcomponent, but it is just important that the order of the subcomponents
+		///      (regardless of how you choose to call this method) are consistent with the MeshInfo
+		///      passed to initialize(...)
+		/// - QuadPointByElem: this method should be called once per an element (or call write_quad
+		///      if you want to call one method for multiple elements.  Just be sure the ordering of
+		///      elements matches the order of elements in the partition.
 		template<typename DataType>
 		void write(
 			const LocalIndex partition_id,
@@ -71,7 +85,7 @@ namespace fea_io
 			const DataType** data,
 			const LocalIndex num_values);
 
-		/// Close the binary file, writes the JSON file, and resets the DataWriter object. 
+		/// Close the binary file, writes the JSON file, and resets the DataWriter object.
 		/// Note: this gets call with the destructor, so you don't have to call it unless
 		/// you want to force it to up the files.
 		void close();
@@ -104,7 +118,7 @@ namespace fea_io
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string file_path, const MeshInfoType mesh_info, const std::vector<PartitionInfoType> partition_info, const std::vector<GlobalIndex> num_quad_points_in_partitions, const std::vector<ArrayInfo> array_infos)
+	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string & file_path, const MeshInfoType & mesh_info, const std::vector<PartitionInfoType> & partition_info, const std::vector<GlobalIndex> & num_quad_points_in_partitions, const std::vector<ArrayInfo> & array_infos)
 	{
 		if (write_state_ != WriteState::Uninitialized && write_state_ != WriteState::Finalized)
 			throw _MSG_EXCEPT_C("initialize(...) can only be called after construction or close().");
@@ -167,6 +181,20 @@ namespace fea_io
 		write_state_ = WriteState::WritePhase;
 	}
 
+    template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+    inline void DataWriter<GlobalIndex, LocalIndex, CoordType>::initialize(const std::string & file_path, const MeshInfoType & mesh_info, const PartitionInfoType & partition_info, const GlobalIndex & num_quad_points_in_partition, const std::vector<ArrayInfo>& array_infos)
+    {
+        std::vector<PartitionInfo<GlobalIndex, LocalIndex, CoordType>> this_partition_info = { partition_info };
+        auto all_partition_info = MPIUtils::all_gather_vectors(this_partition_info);
+        std::vector<GlobalIndex> this_n_quad_points = { num_quad_points_in_partition };
+        auto all_num_quad_points_in_partition = MPIUtils::all_gather_vectors(this_n_quad_points);
+        initialize(file_path,
+            mesh_info,
+            all_partition_info,
+            all_num_quad_points_in_partition,
+            array_infos);
+    }
+
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	template<typename DataType>
 	inline void fea_io::DataWriter<GlobalIndex, LocalIndex, CoordType>::write(const LocalIndex partition_id, const std::string array_name, const DataType * data, const LocalIndex num_values)
@@ -174,7 +202,7 @@ namespace fea_io
 		auto find_iter = array_name_to_id_map_.find(array_name);
 		if (find_iter == array_name_to_id_map_.end())
 			throw _MSG_EXCEPT_C("Data array " + array_name + " was not found. Be sure to pass all of the arrays when you call DataWriter::initialize(...).");
-			
+
 		auto& array_info = array_infos_[find_iter->second];
 		out_stream_.seekp(array_info.begin_offsets[partition_id] + array_info.curr_bytes_written[partition_id]);
 
@@ -184,9 +212,11 @@ namespace fea_io
 			array_info.curr_bytes_written[partition_id] += sizeof(int16_t);
 		}
 		// Write the array of data
-		for (auto i = 0; i < num_values; i++)
-			IOUtils::binary_write(out_stream_, &data[i*array_info.num_comps], array_info.num_comps);
-		
+        for (LocalIndex i = 0; i < num_values; i++)
+        {
+            IOUtils::binary_write(out_stream_, &data[i*array_info.num_comps], array_info.num_comps);
+        }
+
 		array_info.curr_bytes_written[partition_id] += num_values * array_info.num_comps * sizeof(DataType);
 	}
 
@@ -226,7 +256,7 @@ namespace fea_io
 		// Write the array of data
 		for (auto i = 0; i < num_values; i++)
 			IOUtils::binary_write(out_stream_, data[i], array_info.num_comps);
-		
+
 		array_info.curr_bytes_written[partition_id] += num_values * array_info.num_comps * sizeof(DataType);
 	}
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fea_io/common/Exceptions.h"
+
 #include <vector>
 
 #include <nlohmann/json.hpp>

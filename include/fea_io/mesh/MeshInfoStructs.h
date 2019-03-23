@@ -179,6 +179,15 @@ namespace fea_io
 		LocalIndex num_nodes_in_subcomponent;
 		LocalIndex num_elements_in_subcomponent;
 		std::streamoff offset;
+
+        SubcomponentInfo() {}
+        SubcomponentInfo(LocalIndex component_id_a,
+            LocalIndex num_nodes_in_subcomponent_a,
+            LocalIndex num_elements_in_subcomponent_a)
+            : component_id(component_id_a), num_nodes_in_subcomponent(num_nodes_in_subcomponent_a),
+            num_elements_in_subcomponent(num_elements_in_subcomponent_a)
+        {
+        }
 	};
 
 	template<typename LocalIndex>
