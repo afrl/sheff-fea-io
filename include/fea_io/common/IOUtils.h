@@ -168,7 +168,10 @@ namespace fea_io
 	inline void IOUtils::binary_read(std::ifstream & in, std::vector<T>& val, const std::size_t num_values, const int8_t size_of_data_type_in_file)
 	{
 		val.resize(num_values);
-		if (size_of_data_type_in_file == sizeof(T)) {
+        if (num_values == 0) {
+            return;
+        }
+		else if (size_of_data_type_in_file == sizeof(T)) {
 			in.read(reinterpret_cast<char*>(&val[0]), static_cast<std::streamsize>(num_values * sizeof(T)));
 		}
 		else if (size_of_data_type_in_file == sizeof(float)) {

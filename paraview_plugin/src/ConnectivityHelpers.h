@@ -12,7 +12,7 @@ namespace fea_io
 	auto get_to_vtk_cell_map(const fea_io::ConnectivityScheme scheme)
 	{
 		std::map<fea_io::ElementType, VTKCellType> typeMap;
-		if (scheme == fea_io::ConnectivityScheme::Beta){
+		if (scheme == fea_io::ConnectivityScheme::FlexMesh){
 			// 2D Elements
 			typeMap[fea_io::ElementType::T2D3N] = VTK_TRIANGLE;
 			typeMap[fea_io::ElementType::Q2D4N] = VTK_QUAD;
@@ -48,7 +48,7 @@ namespace fea_io
 		const std::vector<vtkIdType> &pfecNodeIndices)
 	{
 		std::vector<vtkIdType> vtkNodeIndices(pfecNodeIndices.begin(), pfecNodeIndices.end());
-		if (scheme == fea_io::ConnectivityScheme::Beta) {
+		if (scheme == fea_io::ConnectivityScheme::FlexMesh) {
 			// 2D reorders
 			if (geomType == fea_io::ElementType::T2D6N) {
 				int VTKMap_2_2[] = { 0,2,4,1,3,5 };
