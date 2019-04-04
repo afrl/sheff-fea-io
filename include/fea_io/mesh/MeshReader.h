@@ -94,7 +94,7 @@ namespace fea_io
 		partition.node_global_ids.resize(num_nodes);
 		partition.node_parent_partitions.resize(num_nodes);
 		partition.node_coords.resize(num_nodes * meta_info_.dimensionality);
-		for (auto i = 0; i < num_nodes; i++) {
+		for (LocalIndex i = 0; i < num_nodes; i++) {
 			IOUtils::binary_read(in_stream_, partition.node_global_ids[i], data_types_in_file.global_index_size);
 			IOUtils::binary_read(in_stream_, partition.node_parent_partitions[i], data_types_in_file.local_index_size);
 			IOUtils::binary_read(in_stream_, &partition.node_coords[meta_info_.dimensionality*i], meta_info_.dimensionality, data_types_in_file.coord_type_size);
@@ -104,7 +104,7 @@ namespace fea_io
 		partition.element_parent_partitions.resize(num_elements);
 		partition.element_types.resize(num_elements);
 		partition.element_connectivities.resize(num_elements);
-		for (auto i = 0; i < num_elements; i++) {
+		for (LocalIndex i = 0; i < num_elements; i++) {
 			IOUtils::binary_read(in_stream_, partition.element_global_ids[i], data_types_in_file.global_index_size);
 			IOUtils::binary_read(in_stream_, partition.element_parent_partitions[i], data_types_in_file.local_index_size);
 			std::underlying_type<ElementType>::type element_type;
@@ -115,7 +115,7 @@ namespace fea_io
 		}
 		// Read subcomponent information
 		LocalIndex num_subcomponents = partition_infos_[partition_id].num_subcomponents;
-		for (auto i = 0; i < num_subcomponents; i++) {
+		for (LocalIndex i = 0; i < num_subcomponents; i++) {
 			Subcomponent<LocalIndex, CoordType> subcomponent;
 			LocalIndex num_nodes_in_subcomponent;
 			LocalIndex num_elements_in_subcomponent;
