@@ -76,13 +76,11 @@ add_library(FeaIo::FeaIo ALIAS feaio)
 target_compile_features(feaio INTERFACE cxx_std_14)
 # Use filesystem if available
 if (FEAIO_HaveFilesystem)
-  add_definitions(-DHAVE_FILESYSTEM)
-  # Add flag to link with experimental/filesystem if GNU. This requires GCC >= 5.3.
-  if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-      target_link_libraries(feaio INTERFACE libstdc++fs.a)
-  endif()
-else()
-  remove_definitions(-DHAVE_FILESYSTEM)
+    target_compile_definitions(feaio INTERFACE HAVE_FILESYSTEM)
+    # Add flag to link with experimental/filesystem if GNU. This requires GCC >= 5.3.
+    if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+        target_link_libraries(feaio INTERFACE libstdc++fs.a)
+    endif()
 endif()
 
 # Link dependencies
