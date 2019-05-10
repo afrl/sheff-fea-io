@@ -25,7 +25,9 @@ include(${CMAKE_SOURCE_DIR}/cmake/CommonInputChecks.cmake)
 ########################
 
 find_package(nlohmann_json 3.2.0 CONFIG REQUIRED
-	HINTS "${CMAKE_SOURCE_DIR}/../third_party/json/build" "${CMAKE_SOURCE_DIR}/../json/build"
+	HINTS "${CMAKE_SOURCE_DIR}/../third_party/json_build" "${CMAKE_SOURCE_DIR}/../json_build"
+	"${CMAKE_SOURCE_DIR}/../third_party/json_install_dir" "${CMAKE_SOURCE_DIR}/../json_install_dir"
+	"${CMAKE_SOURCE_DIR}/../third_party/json/build" "${CMAKE_SOURCE_DIR}/../json/build"
 	"${CMAKE_SOURCE_DIR}/../third_party/json/install_dir" "${CMAKE_SOURCE_DIR}/../json/install_dir"
 )
 if(FEAIO_USE_MPI)
