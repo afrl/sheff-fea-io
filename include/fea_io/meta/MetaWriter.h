@@ -6,7 +6,12 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <experimental/filesystem>
+
+#ifdef HAVE_FILESYSTEM
+#include<experimental/filesystem>
+#else
+#include "fea_io/common/Filesystem.h"
+#endif
 
 #include <nlohmann/json.hpp>
 
