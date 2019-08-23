@@ -24,7 +24,7 @@ namespace fea_io
     class MetaReader
     {
     public:
-        MetaReader() {};
+        MetaReader() {}
 
         void open( const std::string & meta_file_path );
 
@@ -192,5 +192,4 @@ namespace fea_io
             throw _MSG_EXCEPT_C("iteration " + std::to_string(iteration_number) + " did not exist for time step " + std::to_string(time_step.time_step_id));
         return (*find_iter);
     }
-
 }
