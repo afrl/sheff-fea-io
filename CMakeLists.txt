@@ -4,15 +4,15 @@ cmake_minimum_required(VERSION 3.8)
 project(FEAIO VERSION 1.0.0 LANGUAGES CXX)
 
 # Options
-option(FEAIO_BuildDev "Build the main.cpp in the dev folder. (intended for debugging this project by devs)" ON)
-option(FEAIO_BuildParaViewReader "Build ParaView reader for the JSON-binary format supported by the FEAIO project. (Requires having build ParaView from source)" OFF)
-option(FEAIO_BuildTests "Build the unit tests." ON)
-option(FEAIO_USE_MPI "Indicates if the MPI routines should be included in the build. (Required for parallel writing)." OFF)
-option(FEAIO_HaveFilesystem "Use if compiler has included <experimental/filesystem>" ON) 
+option( FEAIO_BuildDev "Build the main.cpp in the dev folder. (intended for debugging this project by devs)" ON )
+option( FEAIO_BuildParaViewReader "Build ParaView reader for the JSON-binary format supported by the FEAIO project. (Requires having build ParaView from source)" OFF )
+option( FEAIO_BuildTests "Build the unit tests." ON )
+option( FEAIO_USE_MPI "Indicates if the MPI routines should be included in the build. (Required for parallel writing)." OFF )
+option( FEAIO_UseFilesystemHack "Use if compiler does not have <experimental/filesystem>" OFF )
 
 # For debugging, print generator, compiler, and options
-message(STATUS "Gen: ${CMAKE_GENERATOR}, CXX: ${CMAKE_CXX_COMPILER_ID}, Mode: ${CMAKE_BUILD_TYPE}")
-message(STATUS "Dev: ${FEAIO_BuildDev}, Tests: ${FEAIO_BuildTests}, MPI: ${FEAIO_USE_MPI}, ParaView: ${FEAIO_BuildParaViewReader}, FS: ${FEAIO_HaveFilesystem}")
+message( STATUS "Gen: ${CMAKE_GENERATOR}, CXX: ${CMAKE_CXX_COMPILER_ID}, Mode: ${CMAKE_BUILD_TYPE}" )
+message( STATUS "Dev: ${FEAIO_BuildDev}, Tests: ${FEAIO_BuildTests}, MPI: ${FEAIO_USE_MPI}, ParaView: ${FEAIO_BuildParaViewReader}, FS HACK: ${FEAIO_UseFilesystemHack}" )
 
 ##################
 # Checking input #
@@ -78,12 +78,13 @@ add_library(FeaIo::FeaIo ALIAS feaio)
 # library and downstream executables will also need the flag)
 target_compile_features(feaio INTERFACE cxx_std_14)
 # Use filesystem if available
-if (FEAIO_HaveFilesystem)
-    target_compile_definitions(feaio INTERFACE HAVE_FILESYSTEM)
+if( FEAIO_UseFilesystemHack )
     # Add flag to link with experimental/filesystem if GNU. This requires GCC >= 5.3.
     if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-        target_link_libraries(feaio INTERFACE libstdc++fs.a)
+        target_link_libraries( feaio INTERFACE libstdc++fs.a )
     endif()
+else()
+    target_compile_definitions( feaio INTERFACE HAVE_FILESYSTEM )
 endif()
 
 # Link dependencies
