@@ -210,14 +210,15 @@ namespace std {
                 // Check if path has extension. Note if you have a separator after a period, this is not counted as an extension.
                 bool has_extension() const
                 {
-                    int ext_pos = _pathname.find_last_of('.');
-                    int sep_pos = _pathname.find_last_of(separator);
-                    if (ext_pos <= sep_pos)
-                        return 0;
-                    else
-                        return 1;
+                    int ext_pos = _pathname.find_last_of( '.' );
+                    int sep_pos = _pathname.find_last_of( separator );
+                    if( ext_pos <= sep_pos ) {
+                    return false;
+                    }
+                    else  {
+                    return true;
+                    }
                 }
-
 
                 // Get the extension of the path. If none, return "".
                 path extension() const
