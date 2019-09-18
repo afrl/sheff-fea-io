@@ -4,22 +4,16 @@
 #include <string>
 #include <vector>
 
-#ifdef HAVE_FILESYSTEM
-#    include<experimental/filesystem>
-#else
-#    include "fea_io/common/Filesystem.h"
-#endif
-
 #include <nlohmann/json.hpp>
 
 #include "fea_io/common/Exceptions.h"
+#include "fea_io/common/Filesystem.h"
 
 #include "MetaStructs.h"
 
 namespace fea_io
 {
     using json = nlohmann::json;
-    namespace fs = std::experimental::filesystem;
 
     class MetaReader
     {
