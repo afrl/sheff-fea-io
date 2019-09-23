@@ -662,13 +662,17 @@ def config( opts, module_dir, specialized_options = [] ):
                        ' -D' + module_name_caps + '_BuildTests:BOOL=' + opts.cmake_opts["make-tests"]
 
     for special_opt in specialized_options:
-        if module_dir.name in special_opt.modules_and_var_map.keys():
-            if special_opt.type == SpecializedOptionType.CMakeUserDefinedBool:
-                cmake_flags += ' -D' + special_opt.modules_and_var_map[module_dir.name] + ':BOOL=' + opts.special_cmake_opts[special_opt.config_var]
-            elif special_opt.type == SpecializedOptionType.CMakeAlwaysTrueBool:
-                cmake_flags += ' -D' + special_opt.modules_and_var_map[module_dir.name] + ':BOOL=ON'
-            elif special_opt.type == SpecializedOptionType.CMakeAlwaysFalseBool:
-                cmake_flags += ' -D' + special_opt.modules_and_var_map[module_dir.name] + ':BOOL=OFF'
+        if special_opt.type == SpecializedOptionType.CMakeUserDefinedBool or \
+            special_opt.type == SpecializedOptionType.CMakeAlwaysTrueBool or \
+            special_opt.type == SpecializedOptionType.CMakeAlwaysFalseBool:
+            
+            if module_dir.name in special_opt.modules_and_var_map.keys():
+                if special_opt.type == SpecializedOptionType.CMakeUserDefinedBool:
+                    cmake_flags += ' -D' + special_opt.modules_and_var_map[module_dir.name] + ':BOOL=' + opts.special_cmake_opts[special_opt.config_var]
+                elif special_opt.type == SpecializedOptionType.CMakeAlwaysTrueBool:
+                    cmake_flags += ' -D' + special_opt.modules_and_var_map[module_dir.name] + ':BOOL=ON'
+                elif special_opt.type == SpecializedOptionType.CMakeAlwaysFalseBool:
+                    cmake_flags += ' -D' + special_opt.modules_and_var_map[module_dir.name] + ':BOOL=OFF'
 
     print_color( "Configuring module: " + module_dir.name, "blue" )
     cmd = mod_for_os( 'cmake -G"' + opts.cmake_opts['generator'] + '" ' + 
