@@ -80,6 +80,14 @@ namespace fea_io
         /// will wait until every process gets to.
         static void barrier(const bool use_local_comm = true);
 
+        /// Each process pass the same type of object on this call, and whatever is on the root
+        /// process will get distributed out to all of the others so the object passed to this
+        /// method will have the same value (even if it is a struct) across all processors.
+        /// Specialization for non-fundamental types (i.e. sizeof(T) would not yield the number of bytes needed)
+        /// For this specialization, serialization is required, so the object must be convertable to JSON
+        template<typename T, typename std::enable_if<!std::is_fundamental<T>::value, T>::type* = nullptr>
+        static void update_from_root(T& obj_on_this_proc, const bool use_local_comm = true);
+
         /// This method will gather a vector from each process to the root process
         /// of the communicator specified.  If use_local_comm is used, then the data
         /// among each group of ranks with the same group_key when init was called
@@ -94,7 +102,7 @@ namespace fea_io
         /// will be sent to the root rank of the respective group.
         /// Specialization for non-fundamental types (i.e. sizeof(T) would not yield the number of bytes needed)
         /// For this specialization, serialization is required, so the object must be convertable to JSON
-        template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type* = nullptr>
+        template<typename T, typename std::enable_if<!std::is_fundamental<T>::value, T>::type* = nullptr>
         static std::vector<T> gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm = true);
 
         /// This method will gather a vector from each process and delivers it to every process
@@ -111,7 +119,7 @@ namespace fea_io
         /// will be sent to the root rank of the respective group.
         /// Specialization for non-fundamental types (i.e. sizeof(T) would not yield the number of bytes needed)
         /// For this specialization, serialization is required, so the object must be convertable to JSON
-        template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type* = nullptr>
+        template<typename T, typename std::enable_if<!std::is_fundamental<T>::value, T>::type* = nullptr>
         static std::vector<T> all_gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm = true);
 
         template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type* = nullptr>
@@ -288,8 +296,8 @@ namespace fea_io
 #endif
     }
 
-    template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type*>
-    inline void fea_io::MPIUtils::update_from_root(T & obj_on_this_proc, const bool use_local_comm)
+    template<typename T, typename std::enable_if<!std::is_fundamental<T>::value, T>::type*>
+    inline void MPIUtils::update_from_root(T & obj_on_this_proc, const bool use_local_comm)
     {
 #ifdef USE_MPI
         const MPIUtilsState& state = get_state();
@@ -405,7 +413,7 @@ namespace fea_io
 #endif
     }
 
-    template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type*>
+    template<typename T, typename std::enable_if<!std::is_fundamental<T>::value, T>::type*>
     inline std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
     {
 #ifdef USE_MPI
@@ -531,7 +539,7 @@ namespace fea_io
 #endif
     }
 
-    template<typename T, typename std::enable_if<not std::is_fundamental<T>::value, T>::type*>
+    template<typename T, typename std::enable_if<!std::is_fundamental<T>::value, T>::type*>
     inline std::vector<T> MPIUtils::all_gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
     {
 #ifdef USE_MPI
