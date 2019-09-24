@@ -145,7 +145,7 @@ namespace fea_io
 	inline void fea_io::MPIUtils::init(int * argc, char *** argv, const int group_key, const bool quiet)
 	{
 #ifdef USE_MPI
-		MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		MPIUtilsState& state = get_state();
 
 		// If the object has already been initialized, just return
 		if (state.initialized == true)
@@ -225,7 +225,7 @@ namespace fea_io
 	inline void MPIUtils::barrier(const bool use_local_comm)
 	{
 #ifdef USE_MPI
-		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		const MPIUtilsState& state = get_state();
 
 		// Select which comm to use for all MPI operations in this call
 		MPI_Comm comm = use_local_comm ? state.local_comm : MPI_COMM_WORLD;
@@ -237,7 +237,7 @@ namespace fea_io
 	inline void fea_io::MPIUtils::update_from_root(T & obj_on_this_proc, const bool use_local_comm)
 	{
 #ifdef USE_MPI
-		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
             throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
@@ -282,7 +282,7 @@ namespace fea_io
 	inline std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
 	{
 #ifdef USE_MPI
-		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
             throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
@@ -356,7 +356,7 @@ namespace fea_io
 	inline std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
 	{
 #ifdef USE_MPI
-		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
             throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
@@ -420,7 +420,7 @@ namespace fea_io
     inline std::vector<T> MPIUtils::all_gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
     {
 #ifdef USE_MPI
-        const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+        const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
             throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
@@ -478,7 +478,7 @@ namespace fea_io
     inline std::vector<T> MPIUtils::all_gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
     {
 #ifdef USE_MPI
-        const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+        const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
             throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
@@ -533,7 +533,7 @@ namespace fea_io
 	inline void MPIUtils::send_to_group(const std::vector<T> data, int target_group_key)
 	{
 #ifdef USE_MPI
-		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
             throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
@@ -553,7 +553,7 @@ namespace fea_io
 	inline void MPIUtils::receive_from_group(std::vector<T>& data, int target_group_key)
 	{
 #ifdef USE_MPI
-		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
             throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
@@ -581,7 +581,7 @@ namespace fea_io
 	inline const int MPIUtils::get_num_local_ranks()
 	{
 #ifdef USE_MPI
-		const MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
             throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
@@ -598,7 +598,7 @@ namespace fea_io
 	inline void MPIUtils::finalize()
 	{
 #ifdef USE_MPI
-		MPIUtilsState& state = fea_io::MPIUtils::get_state();
+		MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
             throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
