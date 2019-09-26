@@ -1,6 +1,8 @@
 #pragma once
 
-#ifdef HAVE_MPI
+#include "Exceptions.h"
+
+#ifdef USE_MPI
 #    include <mpi.h>
 #endif
 
@@ -9,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#define _EXCEPTION(m) _MSG_EXCEPT(m)
 namespace fea_io
 {
     /// This describes all the variables needed for the MPIUtils.
@@ -40,7 +43,7 @@ namespace fea_io
 
         void reset() {
             initialized = false;
-#ifdef HAVE_MPI
+#ifdef USE_MPI
             local_comm = MPI_COMM_NULL;
 #endif
             global_rank = 0;
@@ -169,7 +172,7 @@ namespace fea_io
 #    define VERIFY_INIT( func_name ) \
          { \
              if( !get_state().initialized ) { \
-                 throw _UTIL_MSG_EXCEPT( "MPIUtils::" + std::string( func_name ) + "() called before MPIUtils::init()." ); \
+                 throw _EXCEPTION( "MPIUtils::" + std::string( func_name ) + "() called before MPIUtils::init()." ); \
              } \
          }
 #else
@@ -178,7 +181,7 @@ namespace fea_io
 
     inline bool MPIUtils::is_distributed()
     {
-#ifdef HAVE_MPI
+#ifdef USE_MPI
         return true;
 #else
         return false;
@@ -187,7 +190,7 @@ namespace fea_io
 
     inline void MPIUtils::init(int* argc, char*** argv, const int group_key, const bool quiet)
     {
-#ifndef HAVE_MPI
+#ifndef USE_MPI
         return;
 #else
         MPIUtilsState& state = get_state();
@@ -196,7 +199,7 @@ namespace fea_io
         if (state.initialized == true) {
             // If init() is called more than once, there probably is a logic error in the code that
             // should be addressed (as opposed to ignoring the call)... Thoughts?
-            throw _UTIL_MSG_EXCEPT("MPIUtils::init() already called.");
+            throw _EXCEPTION("MPIUtils::init() already called.");
             //return;
         }
 
@@ -288,7 +291,7 @@ namespace fea_io
 
     inline void MPIUtils::barrier(const bool use_local_comm)
     {
-#ifdef HAVE_MPI
+#ifdef USE_MPI
         VERIFY_INIT("barrier");
         // Select which comm to use for all MPI operations in this call
         MPI_Comm comm = use_local_comm ? get_state().local_comm : MPI_COMM_WORLD;
@@ -303,7 +306,7 @@ namespace fea_io
         const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
-            throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
+            throw _EXCEPTION("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
         }
 
         // Select which comm to use for all MPI operations in this call
@@ -346,7 +349,7 @@ namespace fea_io
     template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
     inline std::vector<T> MPIUtils::gather_vectors(const std::vector<T>& data_from_this_proc, const bool use_local_comm)
     {
-#ifdef HAVE_MPI
+#ifdef USE_MPI
         VERIFY_INIT("gather_vectors");
 
         // Select which comm to use for all MPI operations in this call
@@ -420,7 +423,7 @@ namespace fea_io
         const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
-            throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
+            throw _EXCEPTION("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
         }
 
         // Select which comm to use for all MPI operations in this call
@@ -487,7 +490,7 @@ namespace fea_io
         const MPIUtilsState &state = get_state();
         if (!state.initialized)
         {
-            throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
+            throw _EXCEPTION("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
         }
 
         // Select which comm to use for all MPI operations in this call
@@ -546,7 +549,7 @@ namespace fea_io
         const MPIUtilsState& state = get_state();
         if (!state.initialized)
         {
-            throw _MSG_EXCEPT("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
+            throw _EXCEPTION("An mpi call was called in fea_io before fea_io::MPIUtils::init was called.  Be sure to call init() early.");
         }
 
         // Select which comm to use for all MPI operations in this call
@@ -599,7 +602,7 @@ namespace fea_io
     template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
     inline T MPIUtils::sum_across_ranks(const T& value, const bool use_local_comm)
     {
-#ifdef HAVE_MPI
+#ifdef USE_MPI
         VERIFY_INIT("sum_across_ranks");
         // TODO implement
 #else
@@ -610,7 +613,7 @@ namespace fea_io
     template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
     inline void MPIUtils::send_to_group(const std::vector<T> data, int target_group_key)
     {
-#ifdef HAVE_MPI
+#ifdef USE_MPI
         VERIFY_INIT("send_to_group");
         const MPIUtilsState& state = get_state();
         // Only let the local root send information
@@ -628,7 +631,7 @@ namespace fea_io
     template<typename T, typename std::enable_if<std::is_fundamental<T>::value, T>::type*>
     inline void MPIUtils::receive_from_group(std::vector<T>& data, int target_group_key)
     {
-#ifdef HAVE_MPI
+#ifdef USE_MPI
         VERIFY_INIT("receive_from_group");
         const MPIUtilsState& state = get_state();
         // Only let the local root send information
@@ -654,7 +657,7 @@ namespace fea_io
 
     inline const int MPIUtils::get_num_local_ranks()
     {
-#ifdef HAVE_MPI
+#ifdef USE_MPI
         VERIFY_INIT("get_num_local_ranks");
         int comm_size;
         MPI_Comm_size(get_state().local_comm, &comm_size);
@@ -666,7 +669,7 @@ namespace fea_io
 
     inline void MPIUtils::finalize()
     {
-#ifdef HAVE_MPI
+#ifdef USE_MPI
         VERIFY_INIT("finalize");
         get_state().reset();
 
@@ -675,4 +678,5 @@ namespace fea_io
     }
 }
 
+#undef _EXCEPTION
 #undef VERIFY_INIT
