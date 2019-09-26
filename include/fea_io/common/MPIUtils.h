@@ -61,14 +61,11 @@ namespace fea_io
         /// \attention MPIUtils::init() must be called before calling any of these routines!
         ///
 
-        /// FIXME: It is unclear what "is_distributed()" means.  Currently it returns true
-        /// if the program was linked with MPI.  It is possible that this should be changed
-        /// to return true if the number of ranks is greater than 1.  However, any MPI code
-        /// should actually work regardless of ranks == 1 or ranks > 1.  And by not having
-        /// separate code for this condition, that is less code to debug/test.
-        /// Note, when running the program (either directly with bsamxx, or using mpirun), if
-        /// the MPI libraries were linked in, then MPI will be run.  Note, if run on a single
-        /// rank, MPI itself will employ shortcuts.
+        /// Returns whether the program is running with more than 1 rank on the local comm.
+        /// This should really only be used for the purpose of forking the execution path
+        /// for I/O, since parallel i/O in a distribute environment is significantly more complex.
+        ///
+        /// Note: This does not indicate whether MPI is linked into this build.
         static bool is_distributed();
 
         /// Initializes MPI and creates a MPI communicator for the processes that
@@ -182,7 +179,9 @@ namespace fea_io
     inline bool MPIUtils::is_distributed()
     {
 #ifdef USE_MPI
-        return true;
+        int comm_size;
+        MPI_Comm_size(get_state().local_comm, &comm_size);
+        return comm_size > 1;
 #else
         return false;
 #endif
