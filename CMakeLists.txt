@@ -79,12 +79,16 @@ add_library(FeaIo::FeaIo ALIAS feaio)
 target_compile_features(feaio INTERFACE cxx_std_14)
 # Use filesystem if available
 if( FEAIO_UseFilesystemHack )
-    # Add flag to link with experimental/filesystem if GNU. This requires GCC >= 5.3.
-    if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-        target_link_libraries( feaio INTERFACE libstdc++fs.a )
-    endif()
 else()
-    target_compile_definitions( feaio INTERFACE HAVE_FILESYSTEM )
+  target_compile_definitions(feaio INTERFACE HAVE_FILESYSTEM )
+  if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" )
+      target_link_libraries( feaio INTERFACE libstdc++fs.a )
+  endif()
+  if ($MSVC)
+      # This is to silence the error that MS will remove <experimental/filesystem> and replace
+      # it with <filesystem>
+      target_compile_definitions(feaio INTERFACE _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING)
+  endif()
 endif()
 
 # Link dependencies
