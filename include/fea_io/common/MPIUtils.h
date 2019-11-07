@@ -2,6 +2,8 @@
 
 #include "Exceptions.h"
 
+#include <nlohmann/json.hpp>
+
 #ifdef USE_MPI
 #    include <mpi.h>
 #endif
@@ -14,6 +16,8 @@
 #define _EXCEPTION(m) _MSG_EXCEPT(m)
 namespace fea_io
 {
+    using json = nlohmann::json;
+    
     /// This describes all the variables needed for the MPIUtils.
     /// One instance of this will be created for MPIUtils as a static variable.
     struct MPIUtilsState
