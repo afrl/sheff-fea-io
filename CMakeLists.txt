@@ -60,7 +60,10 @@ set(FEAIO_HEADER_LIST
         ${FEAIO_INCLUDE_SUB}/mesh/MeshReader.h
         ${FEAIO_INCLUDE_SUB}/mesh/MeshStructs.h
         ${FEAIO_INCLUDE_SUB}/mesh/MeshWriter.h
-        ${FEAIO_INCLUDE_SUB}/meta/MetaReader.h)
+        ${FEAIO_INCLUDE_SUB}/meta/MetaEnums.h
+        ${FEAIO_INCLUDE_SUB}/meta/MetaReader.h
+        ${FEAIO_INCLUDE_SUB}/meta/MetaStructs.h
+        ${FEAIO_INCLUDE_SUB}/meta/MetaWriter.h)
         
 # Create header-only target
 add_library(feaio INTERFACE)

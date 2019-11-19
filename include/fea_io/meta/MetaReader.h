@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -20,24 +21,14 @@ namespace fea_io
     public:
         MetaReader() {}
 
-        void open( const std::string & meta_file_path );
+        void open(const std::string& meta_file_path);
 
-        std::string get_mesh_path(const int64_t time_step_id);
-        std::string get_mesh_path_at_t(const double time);
-        std::string get_iteration_mesh_path(const int64_t time_step_id, const int64_t iteration_number);
-
-        std::vector<std::string> get_data_paths(const int64_t time_step_id);
-        std::vector<std::string> get_data_paths_at_t(const double time);
-        std::vector<std::string> get_iteration_data_paths(const int64_t time_step_id, const int64_t iteration_number);
-
-        std::vector<std::string> get_group_paths(const int64_t time_step_id);
-        std::vector<std::string> get_iteration_group_paths(const int64_t time_step_id, const int64_t iteration_number);
-
-        int64_t get_time_step_id_at_t(const double time);
-        int64_t get_closest_time_step_id_to_t(const double time);
+        const AnalysisMetaInfo& get_analysis_meta() const;
+        const TimeStepInfo& get_time_step(const double time) const;
+        const TimeStepInfo& get_closest_time_step(const double time) const;
 
         /// Return the vector of times that has output in the meta file
-        std::vector<double> get_times() const;
+        //std::vector<double> get_times() const;
 
     private:
         fs::path meta_file_dir_;
@@ -46,10 +37,6 @@ namespace fea_io
         std::map<const int64_t, int64_t> time_id_to_index_map;
         std::map<const double, int64_t> time_to_index_map;
         const std::string json_ext = ".x.json";
-
-        TimeStepInfo& get_time_step(const int64_t time_step_id);
-        TimeStepInfo& get_time_step_at_t(const double time);
-        const IterationInfo& get_iteration(const TimeStepInfo& time_step, const int64_t iteration_number);
     };
 
     inline void MetaReader::open( const std::string & meta_file_path )
@@ -75,115 +62,30 @@ namespace fea_io
         }
     }
 
-    inline std::string MetaReader::get_mesh_path(const int64_t time_step_id)
+    inline const AnalysisMetaInfo& MetaReader::get_analysis_meta() const
     {
-        return (meta_file_dir_ / analysis_meta_info_.timesteps[time_step_id].mesh_path).string();
+        return analysis_meta_info_;
     }
 
-    inline std::string MetaReader::get_mesh_path_at_t(const double time)
-    {
-        return get_mesh_path(get_time_step_id_at_t(time));
-    }
-
-    inline std::string MetaReader::get_iteration_mesh_path(const int64_t time_step_id, const int64_t iteration_number)
-    {
-        auto& time_step = get_time_step(time_step_id);
-        auto& iteration = get_iteration(time_step, iteration_number);
-
-        return (meta_file_dir_ / iteration.mesh_path).string();
-    }
-
-    inline std::vector<std::string> MetaReader::get_data_paths(const int64_t time_step_id)
-    {
-        auto& time_step = get_time_step(time_step_id);
-        std::vector<std::string> data_abs_paths = time_step.data_paths;
-        for (auto& path : data_abs_paths)
-            path = (meta_file_dir_ / path).string();
-
-        return data_abs_paths;
-    }
-
-    inline std::vector<std::string> MetaReader::get_data_paths_at_t(const double time)
-    {
-        return get_data_paths(get_time_step_id_at_t(time));
-    }
-
-    inline std::vector<std::string> MetaReader::get_iteration_data_paths(const int64_t time_step_id, const int64_t iteration_number)
-    {
-        auto& time_step = get_time_step(time_step_id);
-        auto& iteration = get_iteration(time_step, iteration_number);
-
-        // Convert from relative to absolute paths
-        std::vector<std::string> data_abs_paths = iteration.data_paths;
-        for (auto& path : data_abs_paths)
-            path = (meta_file_dir_ / path).string();
-
-        return data_abs_paths;
-    }
-
-    inline std::vector<std::string> MetaReader::get_group_paths(const int64_t time_step_id)
-    {
-        auto& time_step = get_time_step(time_step_id);
-
-        std::vector<std::string> group_abs_paths = time_step.group_paths;
-        for (auto& path : group_abs_paths)
-            path = (meta_file_dir_ / path).string();
-
-        return group_abs_paths;
-    }
-
-    inline std::vector<std::string> MetaReader::get_iteration_group_paths(const int64_t time_step_id, const int64_t iteration_number)
-    {
-        auto& time_step = get_time_step(time_step_id);
-        auto& iteration = get_iteration(time_step, iteration_number);
-
-        // Convert from relative to absolute paths
-        std::vector<std::string> group_abs_paths = iteration.group_paths;
-        for (auto& path : group_abs_paths)
-            path = (meta_file_dir_ / path).string();
-
-        return group_abs_paths;
-    }
-
-    inline int64_t MetaReader::get_time_step_id_at_t(const double time)
-    {
-        auto& ts = get_time_step_at_t(time);
-        return ts.time_step_id;
-    }
-
-    inline std::vector<double> MetaReader::get_times() const
-    {
-        std::vector<double> times;
-        for (auto& ts : analysis_meta_info_.timesteps)
-            times.push_back(ts.time);
-        std::sort(times.begin(), times.end());
-        return times;
-    }
-
-    inline TimeStepInfo & MetaReader::get_time_step(const int64_t time_step_id)
-    {
-        auto find_iter = time_id_to_index_map.find(time_step_id);
-        if (find_iter == time_id_to_index_map.end())
-            throw _MSG_EXCEPT_C("Time step " + std::to_string(time_step_id) + " did not exist for the analysis.");
-        return analysis_meta_info_.timesteps[find_iter->second];
-    }
-
-    inline TimeStepInfo & MetaReader::get_time_step_at_t(const double time)
+    inline const TimeStepInfo& MetaReader::get_time_step(const double time) const
     {
         auto find_iter = time_to_index_map.find(time);
-        if (find_iter == time_to_index_map.end())
+        if (find_iter == time_to_index_map.end()) {
             throw _MSG_EXCEPT_C("Time " + std::to_string(time) + " did not exist for the analysis.");
+        }
         return analysis_meta_info_.timesteps[find_iter->second];
     }
 
-    inline const IterationInfo & MetaReader::get_iteration(const TimeStepInfo & time_step, const int64_t iteration_number)
+    inline const TimeStepInfo& MetaReader::get_closest_time_step(const double time) const
     {
-        auto& iterations = time_step.iterations;
-        auto find_iter = std::find_if(iterations.begin(), iterations.end(), [&iteration_number](const IterationInfo& iteration) -> bool {
-                return iteration.iteration_number == iteration_number;
+        auto result_iter = std::min_element(
+            time_to_index_map.begin(), time_to_index_map.end(),
+            // lambda providing if distance(time, lhs) < distance(time, rhs)
+            [&time](const std::pair<const double, int64_t>& lhs,
+                const std::pair<const double, int64_t>& rhs) -> bool
+            {
+                return std::abs(time - lhs.first) < std::abs(time - rhs.first);
             });
-        if (find_iter == iterations.end())
-            throw _MSG_EXCEPT_C("iteration " + std::to_string(iteration_number) + " did not exist for time step " + std::to_string(time_step.time_step_id));
-        return (*find_iter);
+        return analysis_meta_info_.timesteps[result_iter->second];
     }
 }

@@ -20,7 +20,7 @@ namespace fea_io
 	enum class ElementType : char {
 		// Unknown
 		UNKNGEOM = 0, // Used if you all else fails, though you will need to fix it before an analysis
-		GENERALPOLYGON = 2,// polygon (usually for superelements)
+        POLYHEDRON = 2,// polygon (usually for superelements or xfem)
 		// 1D types 10-19
 		DEF1D = 10, // 1-D Default
 		L1D2N = 12, // 1-D Linear 2-node linear element
