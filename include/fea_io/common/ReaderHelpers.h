@@ -11,10 +11,10 @@ namespace fea_io
         const int64_t& time_step_id)
     {
         auto& analysis_info = meta_reader.get_analysis_meta();
-        auto find_iter = std::find(
+        auto find_iter = std::find_if(
             analysis_info.timesteps.begin(),
             analysis_info.timesteps.end(),
-            time_step_id);
+			[time_step_id](const TimeStepInfo& ts) -> bool { return ts.time_step_id == time_step_id; });
         if (find_iter == analysis_info.timesteps.end())
         {
             _MSG_EXCEPT("Time step not found with id: " + std::to_string(time_step_id));
@@ -52,93 +52,110 @@ namespace fea_io
         return levels_of_detail_reversed;
     }
 
-    template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-    struct LODWithMesh
-    {
-        int partition;
-        std::vector<MeshObject> mesh_objects;
-        std::vector<Partition<GlobalIndex, LocalIndex, CoordType>> mesh_object_parts;
-        std::vector<bool> parent_active_element_flags;
-    };
+	/// The meta file JSON is a bit more flexible than the reader supports.
+	/// This helper method validates that there is only one mesh object
+	/// for the given type of mesh at the level of detail indicated.
+	/// \param levels_of_detail_reversed - should come from get_reversed_lods()
+	std::vector<MeshObject> get_mesh_obj_for_each_level(
+		const std::vector<LevelOfDetail>& levels_of_detail_reversed,
+		const MeshObjectType type)
+	{
+		std::vector<MeshObject> mesh_objects;
+		for (auto& lod : levels_of_detail_reversed)
+		{
+			bool found_object = false;
+			for (auto& mesh_object : lod.mesh_objects)
+			{
+				if (mesh_object.type == type)
+				{
+					if (found_object)
+					{
+						_MSG_EXCEPT("Already found a mesh object for level of detail " +
+							std::to_string(lod.level) + " of the same type and the implementation \
+						cannot currently support multiple.");
+					}
+					found_object = true;
+
+					mesh_objects.push_back(mesh_object);
+				}
+			}
+		}
+		return mesh_objects;
+	}
 
     template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-    LODWithMesh<GlobalIndex, LocalIndex, CoordType>
+    struct LODWithPart
+    {
+        int partition;
+        MeshObject mesh_object;
+        Partition<GlobalIndex, LocalIndex, CoordType> mesh_object_part;
+        std::vector<short> parent_element_relative_levels;
+    };
+
+	/// The meta file JSON is a bit more flexible than the reader supports.
+	/// This helper method validates that there is only one mesh object
+	/// for the given type of mesh at the level of detail indicated.
+	///
+	/// Note: assumes the elements of the parent level should be inactive if
+	/// their local id appears as a global id in the lower level.
+	///
+	/// \param lod_mesh_objects - should come from get_mesh_obj_for_each_level()
+    template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	LODWithPart<GlobalIndex, LocalIndex, CoordType>
     read_level_of_detail_helper(
         const MetaReader& meta_reader,
-        const std::vector<LevelOfDetail>& levels_of_detail_reversed,
-        const size_t& level_of_detail_rev_index,
-        const int& partition)
+		const std::vector<LevelOfDetail>& lods_reversed,
+		const std::vector<MeshObject>& lod_rev_mesh_objects,
+        const size_t& lod_rev_index,
+        const int& partition,
+		const MeshObjectType type)
     {
         using MeshReaderTyped = MeshReader<GlobalIndex, LocalIndex, CoordType>;
 
-        auto& lod = levels_of_detail_reversed[level_of_detail_rev_index];
-        LevelOfDetail* parent_lod_ptr = nullptr;
-        if (level_of_detail_rev_index != levels_of_detail_reversed.size() - 1)
+        auto& mesh_object = lod_rev_mesh_objects[lod_rev_index];
+		const MeshObject* parent_mesh_obj_ptr = nullptr;
+        if (lod_rev_index != lod_rev_mesh_objects.size() - 1
+			&& lods_reversed[lod_rev_index].relationship_with_parent == LODParentRelation::ConformingOverlapping)
         {
-            auto parent_lod_ptr = &levels_of_detail_reversed[level_of_detail_rev_index + 1];
+            parent_mesh_obj_ptr = &(lod_rev_mesh_objects[lod_rev_index + 1]);
         }
 
         // Allocate active map for parent LOD
-        LODWithMesh<GlobalIndex, LocalIndex, CoordType> lod_w_mesh;
-        MeshObject* parent_mesh_object_ptr = nullptr;
-        if (parent_lod_ptr != nullptr)
+		LODWithPart<GlobalIndex, LocalIndex, CoordType> lod_w_part;
+        if (parent_mesh_obj_ptr != nullptr)
         {
-            for (auto& mesh_object : parent_lod_ptr->mesh_objects)
-            {
-                if (mesh_object.type == MeshObjectType::Volume)
-                {
-                    if (parent_mesh_object_ptr == nullptr)
-                    {
-                        parent_mesh_object_ptr = &mesh_object;
+            auto mesh_path = meta_reader.get_adjusted_path(parent_mesh_obj_ptr->mesh_path);
+            MeshReaderTyped mesh_reader(mesh_path);
 
-                        // TODO get adjusted path
-                        auto mesh_path = mesh_object.mesh_path;
-                        MeshReaderTyped mesh_reader(mesh_path);
-                        auto& partition_info = mesh_reader.get_partition_info();
-                        lod_w_mesh.parent_active_element_flags.resize(
-                            partition_info[partition].num_elements, true);
-                    }
-                    else
-                    {
-                        // The JSON would have to be extended to indicate which mesh object
-                        // is the parent for a lower level if multiple mesh objects are to
-                        // be supported.
-                        _MSG_EXCEPT("There were multiple mesh objects for level " +
-                            std::to_string(parent_lod_ptr->level) +
-                            ", which is not supported right now as a parent level of detail.");
-                    }
-                }
-            }
+            auto& partition_info = mesh_reader.get_partition_info();
+			lod_w_part.parent_element_relative_levels.resize(
+                partition_info[partition].num_elements,
+				static_cast<short>(lod_rev_index - 1));
         }
 
-        for (auto& mesh_object : lod.mesh_objects)
+		lod_w_part.mesh_object = mesh_object;
+
+        auto mesh_path = meta_reader.get_adjusted_path(mesh_object.mesh_path);
+        MeshReaderTyped mesh_reader(mesh_path);
+
+        auto& partition_info = mesh_reader.get_partition_info();
+        partition_info[partition].num_nodes;
+        partition_info[partition].num_elements;
+
+        mesh_reader.read_partition(partition, lod_w_part.mesh_object_part);
+
+        // Set parent active element flags
+        if (parent_mesh_obj_ptr != nullptr)
         {
-            if (mesh_object.type == MeshObjectType::Volume)
+			auto parent_level = static_cast<short>(lod_rev_index - 1);
+            auto& part = lod_w_part.mesh_object_part;
+            for (auto& parent_local_id : part.element_global_ids)
             {
-                lod_w_mesh.mesh_objects.push_back(mesh_object);
-
-                // TODO get adjusted path
-                auto mesh_path = mesh_object.mesh_path;
-                MeshReaderTyped mesh_reader(mesh_path);
-                auto& partition_info = mesh_reader.get_partition_info();
-                partition_info[partition].num_nodes;
-                partition_info[partition].num_elements;
-
-                lod_w_mesh.mesh_object_parts.emplace_back(
-                    mesh_reader.read_partition(partition));
-
-                // Set parent active element flags
-                if (parent_mesh_object_ptr != nullptr)
-                {
-                    auto& part = lod_w_mesh.mesh_object_parts.back();
-                    for (auto& parent_local_id : part.element_global_ids)
-                    {
-                        lod_w_mesh.parent_active_element_flags[parent_local_id] = false;
-                    }
-                }
+				lod_w_part.parent_element_relative_levels[parent_local_id] =
+					static_cast<short>(parent_level - lod_rev_index);
             }
         }
         
-        return lod_w_mesh;
+        return lod_w_part;
     }
 }

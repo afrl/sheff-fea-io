@@ -15,7 +15,11 @@ VTKArrayType* CreatePartitionArrayForComponent(
 	const std::vector<ValueType>& partitionValues,
 	const std::vector<IndexType>& subcomponentIndices)
 {
-	return CreatePartitionArrayForComponent<VTKArrayType, IndexType, ValueType>(arrayName, numComps, &partitionValues[0], subcomponentIndices);
+	return CreatePartitionArrayForComponent<VTKArrayType, IndexType, ValueType>(
+		arrayName,
+		numComps,
+		partitionValues.data(),
+		subcomponentIndices);
 }
 
 /// Creates an array for quantities that on a partition basis
@@ -34,7 +38,11 @@ VTKArrayType* CreatePartitionArrayForComponent(
 	const int64_t numValues = static_cast<int64_t>(subcomponentIndices.size());
 	arr->SetNumberOfTuples(numValues);
 	for (auto i = 0; i < numValues; i++)
-		arr->SetTypedTuple(i, &partitionValues[numComps*subcomponentIndices[i]]);
+	{
+		arr->SetTypedTuple(
+			i,
+			&partitionValues[numComps*subcomponentIndices[i]]);
+	}
 	return arr;
 }
 
@@ -54,7 +62,9 @@ VTKArrayType* CreatePartitionArrayForComponent(
 	const int64_t numValues = static_cast<int64_t>(subcomponentIndices.size());
 	arr->SetNumberOfTuples(numValues);
 	for (auto i = 0; i < numValues; i++)
+	{
 		arr->SetTypedTuple(i, &value);
+	}
 	return arr;
 }
 
@@ -84,17 +94,24 @@ std::array<VTKArrayType*, 3> CreateLocalCoordinateSystems(
 	localZArray->SetNumberOfTuples(numLCSs);
 
 	Eigen::Matrix<CoordType, 3, 3> rotationMatrix;
-	for (auto i = 0; i < numLCSs; i++) {
-		if (componentInfo.lcs_parameterization == fea_io::LCSParameterization::Quaternion) {
-			Eigen::Quaternion<CoordType> quaternion(subcomponent.lcs_parameters_in_subcomponent[numParametersPerValue*i],
+	for (auto i = 0; i < numLCSs; i++)
+	{
+		if (componentInfo.lcs_parameterization == fea_io::LCSParameterization::Quaternion)
+		{
+			Eigen::Quaternion<CoordType> quaternion(
+				subcomponent.lcs_parameters_in_subcomponent[numParametersPerValue*i],
 				subcomponent.lcs_parameters_in_subcomponent[numParametersPerValue*i + 1],
 				subcomponent.lcs_parameters_in_subcomponent[numParametersPerValue*i + 2],
 				subcomponent.lcs_parameters_in_subcomponent[numParametersPerValue*i + 3]);
 			rotationMatrix = quaternion.toRotationMatrix();
 		}
-		else if (componentInfo.lcs_parameterization == fea_io::LCSParameterization::AxisAngle) {
-			Eigen::Matrix<CoordType, 3, 1> axis(&subcomponent.lcs_parameters_in_subcomponent[numParametersPerValue*i]);
-			Eigen::AngleAxis<CoordType> axisAngle(subcomponent.lcs_parameters_in_subcomponent[numParametersPerValue*i + 3], axis);
+		else if (componentInfo.lcs_parameterization == fea_io::LCSParameterization::AxisAngle)
+		{
+			Eigen::Matrix<CoordType, 3, 1> axis(
+				&subcomponent.lcs_parameters_in_subcomponent[numParametersPerValue*i]);
+			Eigen::AngleAxis<CoordType> axisAngle(
+				subcomponent.lcs_parameters_in_subcomponent[numParametersPerValue*i + 3],
+				axis);
 			rotationMatrix = axisAngle.toRotationMatrix();
 		}
 		localXArray->InsertTuple3(i, rotationMatrix(0, 0), rotationMatrix(1, 0), rotationMatrix(2, 0));
@@ -135,20 +152,39 @@ std::array<VTKArrayType*, 3> CreateLocalCoordinateSystems(
 	localZArray->SetNumberOfTuples(numLCSs);
 
 	Eigen::Matrix<CoordType, 3, 3> rotationMatrix;
-	if (lcsParameterization == fea_io::LCSParameterization::Quaternion) {
-		Eigen::Quaternion<CoordType> quaternion(singleLCSParameters[0], singleLCSParameters[1], singleLCSParameters[2], singleLCSParameters[3]);
+	if (lcsParameterization == fea_io::LCSParameterization::Quaternion)
+	{
+		Eigen::Quaternion<CoordType> quaternion(
+			singleLCSParameters[0],
+			singleLCSParameters[1],
+			singleLCSParameters[2],
+			singleLCSParameters[3]);
 		rotationMatrix = quaternion.toRotationMatrix();
 	}
-	else if (lcsParameterization == fea_io::LCSParameterization::AxisAngle) {
+	else if (lcsParameterization == fea_io::LCSParameterization::AxisAngle)
+	{
 		Eigen::Matrix<CoordType, 3, 1> axis(&singleLCSParameters[0]);
 		Eigen::AngleAxis<CoordType> axisAngle(singleLCSParameters[3], axis);
 		rotationMatrix = axisAngle.toRotationMatrix();
 	}
 
-	for (auto i = 0; i < numLCSs; i++) {
-		localXArray->InsertTuple3(i, rotationMatrix(0, 0), rotationMatrix(1, 0), rotationMatrix(2, 0));
-		localYArray->InsertTuple3(i, rotationMatrix(0, 1), rotationMatrix(1, 1), rotationMatrix(2, 1));
-		localZArray->InsertTuple3(i, rotationMatrix(0, 2), rotationMatrix(1, 2), rotationMatrix(2, 2));
+	for (auto i = 0; i < numLCSs; i++)
+	{
+		localXArray->InsertTuple3(
+			i, 
+			rotationMatrix(0, 0),
+			rotationMatrix(1, 0),
+			rotationMatrix(2, 0));
+		localYArray->InsertTuple3(
+			i,
+			rotationMatrix(0, 1),
+			rotationMatrix(1, 1),
+			rotationMatrix(2, 1));
+		localZArray->InsertTuple3(
+			i,
+			rotationMatrix(0, 2),
+			rotationMatrix(1, 2),
+			rotationMatrix(2, 2));
 	}
 
 	return { localXArray, localYArray, localZArray };

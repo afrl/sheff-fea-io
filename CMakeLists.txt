@@ -1,7 +1,7 @@
 cmake_policy(SET CMP0048 NEW)
 cmake_minimum_required(VERSION 3.8)
 
-project(FEAIO VERSION 1.0.0 LANGUAGES CXX)
+project(FEAIO VERSION 1.0.0 LANGUAGES C CXX)
 
 # Options
 option( FEAIO_BuildDev "Build the main.cpp in the dev folder. (intended for debugging this project by devs)" ON )
@@ -20,6 +20,8 @@ message( STATUS "Dev: ${FEAIO_BuildDev}, Tests: ${FEAIO_BuildTests}, MPI: ${FEAI
 
 include( ${CMAKE_SOURCE_DIR}/cmake/CommonInputChecks.cmake )
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 ########################
 # Declare dependencies #
 ########################
@@ -32,7 +34,7 @@ find_package( nlohmann_json 3.2.0 CONFIG REQUIRED
 )
 
 if( FEAIO_USE_MPI )
-    find_package( MPI REQUIRED )
+    find_package(MPI REQUIRED)
 endif()
 
 #######################################

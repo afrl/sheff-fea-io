@@ -1,0 +1,7 @@
+NAME
+  FEAIOReaders
+DEPENDS
+  VTK::FiltersCore
+PRIVATE_DEPENDS
+  VTK::CommonCore
+  VTK::FiltersGeneral

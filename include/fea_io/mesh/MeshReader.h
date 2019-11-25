@@ -30,6 +30,10 @@ namespace fea_io
 
 		/// Read a particular partition from the file
 		PartitionType read_partition(const LocalIndex& partition_id);
+		/// Read a particular partition from the file and fill struct by ref
+		void read_partition(
+			const LocalIndex& partition_id,
+			PartitionType& output);
 
 		const MeshInfoType& get_mesh_info() const { return meta_info_; };
 		const std::vector<PartitionInfoType>& get_partition_info() const { return partition_infos_; };
@@ -46,6 +50,15 @@ namespace fea_io
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	inline MeshReader<GlobalIndex, LocalIndex, CoordType>::MeshReader(const std::string file_path)
 	{
+		if (!fs::exists(file_path + json_ext))
+		{
+			_MSG_EXCEPT_C("Mesh JSON file does not exist: " + file_path + json_ext);
+		}
+		if (!fs::exists(file_path + binary_ext))
+		{
+			_MSG_EXCEPT_C("Mesh binary file does not exist: " + file_path + binary_ext);
+		}
+
 		in_stream_.open(file_path + binary_ext, std::ios::binary | std::fstream::in);
 		std::ifstream json_component(file_path + json_ext);
 		json j;
@@ -56,7 +69,8 @@ namespace fea_io
 		// Note: standard container overloads operator= so a simple:
 		// partition_infos_ = j["partition_info"];
 		// would throw an ambiguity error.
-		for (auto& obj : j["partition_info"]) {
+		for (auto& obj : j["partition_info"])
+		{
 			PartitionInfoType part_info = obj;
 			partition_infos_.push_back(part_info);
 		}
@@ -66,7 +80,10 @@ namespace fea_io
 		data_types.deduce<GlobalIndex, LocalIndex, CoordType>();
 		data_types_in_file = j["types"];
 		if (not data_types.is_large_enough(data_types_in_file))
-			throw _MSG_EXCEPT_C("The data types used for the MeshReader template are too small for the data in the file being read.");
+		{
+			throw _MSG_EXCEPT_C("The data types used for the MeshReader template are \
+				too small for the data in the file being read.");
+		}
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
@@ -76,13 +93,25 @@ namespace fea_io
 	}
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
-	inline Partition<GlobalIndex, LocalIndex, CoordType> MeshReader<GlobalIndex, LocalIndex, CoordType>::read_partition(const LocalIndex & partition_id)
+	inline Partition<GlobalIndex, LocalIndex, CoordType> MeshReader<GlobalIndex, LocalIndex, CoordType>::read_partition(
+		const LocalIndex & partition_id)
+	{
+		Partition<GlobalIndex, LocalIndex, CoordType> partition;
+		read_partition(partition_id, partition);
+		return partition;
+	}
+
+	template<typename GlobalIndex, typename LocalIndex, typename CoordType>
+	inline void MeshReader<GlobalIndex, LocalIndex, CoordType>::read_partition(
+		const LocalIndex & partition_id,
+		Partition<GlobalIndex, LocalIndex, CoordType> & partition)
 	{
 		if (partition_id > meta_info_.partition_offsets.size() - 1)
+		{
 			throw _MSG_EXCEPT_C("The partition id was larger than the number of partitions indicated by the JSON file.");
+		}
 
 		in_stream_.seekg(meta_info_.partition_offsets[partition_id]);
-		Partition<GlobalIndex, LocalIndex, CoordType> partition;
 
 		// Read high-level information
 		LocalIndex num_nodes = partition_infos_[partition_id].num_nodes;
@@ -131,8 +160,5 @@ namespace fea_io
 
 			partition.subcomponents.push_back(subcomponent);
 		}
-
-
-		return partition;
 	}
 }

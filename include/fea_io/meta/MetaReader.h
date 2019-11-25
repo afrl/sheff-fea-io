@@ -26,6 +26,12 @@ namespace fea_io
         const AnalysisMetaInfo& get_analysis_meta() const;
         const TimeStepInfo& get_time_step(const double time) const;
         const TimeStepInfo& get_closest_time_step(const double time) const;
+		/// The paths within the analysis meta JSON file are all relative
+		/// paths based on the location of the meta JSON file itself.
+		/// This method adjusts a path in the structure returned by 
+		/// get_analysis_meta() by prepending directory of the meta_file_path,
+		/// changing the paths to be relative to the working directory.
+		const std::string get_adjusted_path(const std::string& path) const;
 
         /// Return the vector of times that has output in the meta file
         //std::vector<double> get_times() const;
@@ -42,9 +48,15 @@ namespace fea_io
     inline void MetaReader::open( const std::string & meta_file_path )
     {
         fs::path meta_path = fs::path(meta_file_path);
-        if (!meta_path.has_extension()) {
+        if (!meta_path.has_extension())
+		{
             meta_path = fs::path(meta_file_path + json_ext);
         }
+
+		if (!fs::exists(meta_path))
+		{
+			_MSG_EXCEPT_C("Meta file does not exist: " + meta_path.string());
+		}
 
         meta_file_dir_ = meta_path.parent_path();
         meta_file_name_ = meta_path.filename().string();
@@ -88,4 +100,9 @@ namespace fea_io
             });
         return analysis_meta_info_.timesteps[result_iter->second];
     }
+
+	inline const std::string MetaReader::get_adjusted_path(const std::string & path) const
+	{
+		return (meta_file_dir_ / path).generic_string();
+	}
 }

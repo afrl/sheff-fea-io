@@ -1,0 +1,208 @@
+<ServerManagerConfiguration>
+    <ProxyGroup name="sources">
+    <!-- ================================================================== -->
+    <SourceProxy name="FEAIOReader" class="vtkFEAIOReader" label="FEAIOReader">
+        <Documentation
+            long_help="Supports reading of the JSON-binary file format for finite element analysis data that is supported by the fea_io project."
+            short_help="Read a JSON-binary FEA file.">
+        </Documentation>
+        <StringVectorProperty
+            name="FileName"
+            animateable="0"
+            command="SetFileName"
+            number_of_elements="1">
+        <FileListDomain name="files"/>
+        <Documentation>
+            This property specifies the file name for the reader.
+        </Documentation>
+        </StringVectorProperty>
+
+        <!-- ================================================================== -->
+
+        <StringVectorProperty name="VolumeLODInfo"
+            command="GetVolumeLODList"
+            information_only="1">
+            <StringArrayHelper attribute_name="VolumeLOD"/>
+        </StringVectorProperty>
+
+        <StringVectorProperty name="VolumeLODSelection"
+            label="Volume Level of Detail"
+            command="SetVolumeLOD"
+            number_of_elements="1"
+            animateable="0">
+            <StringListDomain name="volume_lod_list">
+                <RequiredProperties>
+                    <Property name="VolumeLODInfo" 
+                        function="ArraySelection"/>
+                </RequiredProperties>
+            </StringListDomain>
+        </StringVectorProperty>
+
+        <!-- ================================================================== -->
+
+        <StringVectorProperty name="SurfaceLODInfo"
+            command="GetSurfaceLODList"
+            information_only="1">
+            <StringArrayHelper attribute_name="SurfaceLOD"/>
+        </StringVectorProperty>
+
+        <StringVectorProperty name="SurfaceLODSelection"
+            label="Surface Level of Detail"
+            command="SetSurfaceLOD"
+            number_of_elements="1"
+            animateable="0">
+            <StringListDomain name="Surface_lod_list">
+                <RequiredProperties>
+                    <Property name="SurfaceLODInfo" 
+                        function="ArraySelection"/>
+                </RequiredProperties>
+            </StringListDomain>
+        </StringVectorProperty>
+            
+        <!-- ================================================================== -->
+
+        <StringVectorProperty name="PartitionInfo"
+            information_only="1">
+            <ArraySelectionInformationHelper attribute_name="Partition"/>
+        </StringVectorProperty>
+        
+        <StringVectorProperty name="PartitionStatus"
+            command="SetPartitionStatus"
+            number_of_elements="0" 
+            repeat_command="1" number_of_elements_per_command="2"
+            element_types="2 0"
+            information_property="PartitionInfo"
+            label="Partitions">
+            <ArraySelectionDomain name="partition_list">
+                <RequiredProperties>
+                    <Property name="PartitionInfo" 
+                    function="PartitionList"/>
+                </RequiredProperties>
+            </ArraySelectionDomain>
+        </StringVectorProperty>
+
+        <!-- ================================================================== -->
+
+        <StringVectorProperty name="ComponentInfo"
+            information_only="1">
+            <ArraySelectionInformationHelper attribute_name="Component"/>
+        </StringVectorProperty>
+        
+        <StringVectorProperty name="ComponentStatus"
+            command="SetComponentStatus"
+            number_of_elements="0" 
+            repeat_command="1" number_of_elements_per_command="2"
+            element_types="2 0"
+            information_property="ComponentInfo"
+            label="Components">
+            <ArraySelectionDomain name="component_list">
+                <RequiredProperties>
+                    <Property name="ComponentInfo" 
+                    function="ComponentList"/>
+                </RequiredProperties>
+            </ArraySelectionDomain>
+        </StringVectorProperty>	  
+
+        <!-- ================================================================== -->
+
+        <StringVectorProperty name="VolumePointArrayInfo"
+            information_only="1">
+            <ArraySelectionInformationHelper attribute_name="VolumePoint"/>
+        </StringVectorProperty>
+        
+        <StringVectorProperty name="VolumePointArrayStatus"
+            command="SetVolumePointArrayStatus"
+            number_of_elements="0" 
+            repeat_command="1" number_of_elements_per_command="2"
+            element_types="2 0"
+            information_property="VolumePointArrayInfo"
+            label="Point Data Fields for Volume Meshes">
+            <ArraySelectionDomain name="volume_point_list">
+                <RequiredProperties>
+                    <Property name="VolumePointArrayInfo" 
+                    function="VolumePointArrayList"/>
+                </RequiredProperties>
+            </ArraySelectionDomain>
+        </StringVectorProperty>
+        
+        <StringVectorProperty name="VolumeCellArrayInfo"
+            information_only="1">
+            <ArraySelectionInformationHelper attribute_name="VolumeCell"/>
+        </StringVectorProperty>
+        
+        <StringVectorProperty name="VolumeCellArrayStatus"
+            command="SetVolumeCellArrayStatus"
+            number_of_elements="0" 
+            repeat_command="1" number_of_elements_per_command="2"
+            element_types="2 0"
+            information_property="VolumeCellArrayInfo"
+            label="Cell Data Fields for Volume Meshes">
+            <ArraySelectionDomain name="volume_cell_list">
+                <RequiredProperties>
+                    <Property name="VolumeCellArrayInfo" 
+                    function="VolumeCellArrayList"/>
+                </RequiredProperties>
+            </ArraySelectionDomain>
+        </StringVectorProperty>
+
+        <!-- ================================================================== -->
+
+        <StringVectorProperty name="SurfacePointArrayInfo"
+            information_only="1">
+            <ArraySelectionInformationHelper attribute_name="SurfacePoint"/>
+        </StringVectorProperty>
+        
+        <StringVectorProperty name="SurfacePointArrayStatus"
+            command="SetSurfacePointArrayStatus"
+            number_of_elements="0" 
+            repeat_command="1" number_of_elements_per_command="2"
+            element_types="2 0"
+            information_property="SurfacePointArrayInfo"
+            label="Point Data Fields for Surface Meshes">
+            <ArraySelectionDomain name="surface_point_list">
+                <RequiredProperties>
+                    <Property name="SurfacePointArrayInfo" 
+                    function="SurfacePointArrayList"/>
+                </RequiredProperties>
+            </ArraySelectionDomain>
+        </StringVectorProperty>
+        
+        <StringVectorProperty name="SurfaceCellArrayInfo"
+            information_only="1">
+            <ArraySelectionInformationHelper attribute_name="SurfaceCell"/>
+        </StringVectorProperty>
+        
+        <StringVectorProperty name="SurfaceCellArrayStatus"
+            command="SetSurfaceCellArrayStatus"
+            number_of_elements="0" 
+            repeat_command="1" number_of_elements_per_command="2"
+            element_types="2 0"
+            information_property="SurfaceCellArrayInfo"
+            label="Cell Data Fields for Surface Meshes">
+            <ArraySelectionDomain name="surface_cell_list">
+                <RequiredProperties>
+                    <Property name="SurfaceCellArrayInfo" 
+                    function="SurfaceCellArrayList"/>
+                </RequiredProperties>
+            </ArraySelectionDomain>
+        </StringVectorProperty>
+        
+        <DoubleVectorProperty 
+            name="TimestepValues"
+            information_only="1">
+            <TimeStepsInformationHelper/>
+            <Documentation>
+            Available timestep values.
+            </Documentation>
+        </DoubleVectorProperty>
+
+        
+        <Hints>
+        <ReaderFactory extensions="x.json"
+                        file_description="Meta File for JSON-binary FEA Format" />
+        </Hints>
+    </SourceProxy>
+    <!-- End FEAIOReader -->
+    </ProxyGroup>
+    <!-- End Filters Group -->
+</ServerManagerConfiguration>

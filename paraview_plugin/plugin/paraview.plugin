@@ -1,0 +1,8 @@
+NAME
+  FEAIOReader
+DESCRIPTION
+  An example paraview plugin.
+REQUIRES_MODULES
+  VTK::CommonCore
+  VTK::FiltersCore
+  VTK::FiltersGeneral
