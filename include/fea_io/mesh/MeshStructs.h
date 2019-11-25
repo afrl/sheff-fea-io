@@ -64,7 +64,9 @@ namespace fea_io
 
 	template<typename GlobalIndex, typename LocalIndex, typename CoordType,
 		typename GlobalIndex2, typename LocalIndex2, typename CoordType2>
-	bool operator ==(const Partition<GlobalIndex, LocalIndex, CoordType>& lhs, const Partition<GlobalIndex2, LocalIndex2, CoordType2>& rhs)
+	bool operator ==(
+        const Partition<GlobalIndex, LocalIndex, CoordType>& lhs,
+        const Partition<GlobalIndex2, LocalIndex2, CoordType2>& rhs)
 	{
 		return (lhs.partition_id == rhs.partition_id)
 			&& compare_vec(lhs.node_global_ids, rhs.node_global_ids)

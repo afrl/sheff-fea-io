@@ -13,7 +13,7 @@ namespace fea_io
 {
     using json = nlohmann::json;
 
-    struct MeshObect
+    struct MeshObject
     {
         MeshObjectType type;
         std::string mesh_path;
@@ -21,7 +21,7 @@ namespace fea_io
         std::vector<std::string> group_paths;
     };
 
-    static void to_json(json& j, const MeshObect& i)
+    static void to_json(json& j, const MeshObject& i)
     {
         j = json{ {"type", to_string(i.type)},
                   {"mesh_path", i.mesh_path}
@@ -34,7 +34,7 @@ namespace fea_io
         }
     }
 
-    static void from_json(const json& j, MeshObect& i)
+    static void from_json(const json& j, MeshObject& i)
     {
         i.type = mesh_object_type_from_name(j.at("type").get<std::string>());
         j.at("mesh_path").get_to(i.mesh_path);
@@ -50,7 +50,7 @@ namespace fea_io
     {
         int level;
         LODParentRelation relationship_with_parent;
-        std::vector<MeshObect> mesh_objects;
+        std::vector<MeshObject> mesh_objects;
     };
 
     static void to_json(json& j, const LevelOfDetail& i)
