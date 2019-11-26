@@ -33,6 +33,7 @@ namespace fea_io
 		T2D6N = 25, // triangular 2D 6-node element (quadratic)
 		Q2D8N = 26, // quadrilateral 8-node quadratic element (quadratic)
 		C2D6N = 28, // line 6-node cohesive element (quadratic)
+        POLYGON = 29,
 		// Linear 3D 30-39
 		DEF3D = 30, // 3-D Default
 		T3D4N = 31, // 3D tetrahedral 4-node  (linear) element

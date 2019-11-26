@@ -608,19 +608,24 @@ int vtkFEAIOReader::RequestData(
 
 		// Filter to the selected level of detail
 		int intervalSets[2];
-		// "RelativeLevel" > 0 
-		intervalSets[0] = VolumeThreshold->AddHighpassIntervalSet(0,
-			vtkDataObject::FIELD_ASSOCIATION_CELLS, "RelativeLevel", 0, 1);
-		// Or "RelativeLevel" == -SelectedVolumeLevel
-		intervalSets[1] = VolumeThreshold->AddBandpassIntervalSet(-SelectedVolumeLevel, -SelectedVolumeLevel,
-			vtkDataObject::FIELD_ASSOCIATION_CELLS, "RelativeLevel", 0, 1);
-		int intermediate = VolumeThreshold->AddBooleanSet(vtkMultiThreshold::OR, 2, &intervalSets[0]);
+		// "RelativeLevel" in [0, SelectedLevel] 
+		intervalSets[0] = VolumeThreshold->AddIntervalSet(
+			0, SelectedLevel,
+			vtkMultiThreshold::CLOSED, vtkMultiThreshold::OPEN,
+     		vtkDataObject::FIELD_ASSOCIATION_POINTS,
+			"RelativeLevel", 0, 1 );
+		// Or "RelativeLevel" == -(SelectedLevel + 1)
+		intervalSets[1] = VolumeThreshold->AddIntervalSet(
+			-(SelectedLevel + 1), -(SelectedLevel + 1),
+			vtkMultiThreshold::CLOSED, vtkMultiThreshold::CLOSED,
+     		vtkDataObject::FIELD_ASSOCIATION_POINTS,
+			"RelativeLevel", 0, 1 );
 
-		// Note: this fails.
+		int orBoolean = VolumeThreshold->AddBooleanSet(
+			vtkMultiThreshold::OR, 2, &intervalSets[0]);)
+		int outputGridIndex = VolumeThreshold->OuptutSet(orBoolean);
 
 		VolumeThreshold->SetInputData(VolumeMultiBlockStructure);
-		VolumeThreshold->ThresholdByLower(thresholdValue);
-		VolumeThreshold->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_CELLS, "RelativeLevel");
 		VolumeThreshold->SetOutput(outInfo->Get(vtkMultiBlockDataSet::DATA_OBJECT()));
 		VolumeThreshold->Update();
 

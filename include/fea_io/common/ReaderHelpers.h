@@ -152,7 +152,7 @@ namespace fea_io
             for (auto& parent_local_id : part.element_global_ids)
             {
 				lod_w_part.parent_element_relative_levels[parent_local_id] =
-					static_cast<short>(parent_level - lod_rev_index);
+					static_cast<short>(-lod_rev_index);
             }
         }
         
