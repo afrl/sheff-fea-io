@@ -4,7 +4,6 @@
 #include "vtkSmartPointer.h"
 #include "vtkIntArray.h"
 #include "vtkStringArray.h"
-#include "vtkMultiThreshold.h"
 
 #include "FEAIOReadersModule.h" // for export macros
 
@@ -22,6 +21,7 @@ class vtkPoints;
 class vtkIntArray;
 class vtkFloatArray;
 class vtkDoubleArray;
+class vtkThreshold;
 
 // TODO Move this
 
@@ -236,7 +236,7 @@ protected:
 	// time step for the volume.  This is actually filtered by VolumeThreshold
 	// before it is supplied to the output of this source.
 	vtkSmartPointer<vtkMultiBlockDataSet> VolumeMultiBlockStructure;
-	vtkSmartPointer<vtkMultiThreshold> VolumeThreshold;
+	vtkSmartPointer<vtkMultiBlockDataSet> OutputMultiBlockStructure;
 	int SelectedVolumeLevel;
 
 private:

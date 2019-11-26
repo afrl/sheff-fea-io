@@ -6,3 +6,4 @@ REQUIRES_MODULES
   VTK::CommonCore
   VTK::FiltersCore
   VTK::FiltersGeneral
+  VTK::FiltersExtraction

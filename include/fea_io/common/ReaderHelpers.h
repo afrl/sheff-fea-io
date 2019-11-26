@@ -147,12 +147,12 @@ namespace fea_io
         // Set parent active element flags
         if (parent_mesh_obj_ptr != nullptr)
         {
-			auto parent_level = static_cast<short>(lod_rev_index - 1);
+			auto this_level = static_cast<short>(lods_reversed[lod_rev_index].level);
             auto& part = lod_w_part.mesh_object_part;
             for (auto& parent_local_id : part.element_global_ids)
             {
 				lod_w_part.parent_element_relative_levels[parent_local_id] =
-					static_cast<short>(-lod_rev_index);
+					static_cast<short>(-this_level);
             }
         }
         

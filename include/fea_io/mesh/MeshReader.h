@@ -5,6 +5,7 @@
 #include "fea_io/common/Common.h"
 #include "fea_io/common/Exceptions.h"
 #include "fea_io/common/IOUtils.h"
+#include "fea_io/common/Filesystem.h"
 
 #include "MeshInfoStructs.h"
 #include "MeshStructs.h"
@@ -118,43 +119,69 @@ namespace fea_io
 		LocalIndex num_elements = partition_infos_[partition_id].num_elements;
 		IOUtils::binary_read(in_stream_, partition.partition_id, data_types_in_file.local_index_size);
 		if (partition_id != partition.partition_id)
+		{
 			throw _MSG_EXCEPT_C("The partition id in the file did not match the one requested, indicating a corrupted lookup table.  Perhaps the JSON file was changed externally.");
+		}
+
 		// Read node information
 		partition.node_global_ids.resize(num_nodes);
 		partition.node_parent_partitions.resize(num_nodes);
 		partition.node_coords.resize(num_nodes * meta_info_.dimensionality);
-		for (LocalIndex i = 0; i < num_nodes; i++) {
+		for (LocalIndex i = 0; i < num_nodes; i++)
+		{
 			IOUtils::binary_read(in_stream_, partition.node_global_ids[i], data_types_in_file.global_index_size);
 			IOUtils::binary_read(in_stream_, partition.node_parent_partitions[i], data_types_in_file.local_index_size);
 			IOUtils::binary_read(in_stream_, &partition.node_coords[meta_info_.dimensionality*i], meta_info_.dimensionality, data_types_in_file.coord_type_size);
 		}
+
 		// Read element information
 		partition.element_global_ids.resize(num_elements);
 		partition.element_parent_partitions.resize(num_elements);
 		partition.element_types.resize(num_elements);
 		partition.element_connectivities.resize(num_elements);
-		for (LocalIndex i = 0; i < num_elements; i++) {
+		for (LocalIndex i = 0; i < num_elements; i++)
+		{
 			IOUtils::binary_read(in_stream_, partition.element_global_ids[i], data_types_in_file.global_index_size);
 			IOUtils::binary_read(in_stream_, partition.element_parent_partitions[i], data_types_in_file.local_index_size);
 			std::underlying_type<ElementType>::type element_type;
 			IOUtils::binary_read(in_stream_, element_type);
 			partition.element_types[i] = static_cast<ElementType>(element_type);
+			// THIS is a problem for polyhedra.  They have "0" nodes.
 			auto num_nodes_for_elem = get_num_nodes_for_type(partition.element_types[i]);
 			IOUtils::binary_read(in_stream_, partition.element_connectivities[i], num_nodes_for_elem, data_types_in_file.local_index_size);
 		}
+
 		// Read subcomponent information
 		LocalIndex num_subcomponents = partition_infos_[partition_id].num_subcomponents;
-		for (LocalIndex i = 0; i < num_subcomponents; i++) {
+		for (LocalIndex i = 0; i < num_subcomponents; i++)
+		{
+			auto& subcomponent_info = partition_infos_[partition_id].subcomponents[i];
+
 			Subcomponent<LocalIndex, CoordType> subcomponent;
 			LocalIndex num_nodes_in_subcomponent;
 			LocalIndex num_elements_in_subcomponent;
 			LocalIndex num_lcs_params_in_subcomponent;
 
 			IOUtils::binary_read(in_stream_, subcomponent.component_id, data_types_in_file.local_index_size);
+			if (subcomponent.component_id != subcomponent_info.component_id)
+			{
+				throw _MSG_EXCEPT_C("The component id of a subcomponet did not match the value in the JSON.");
+			}
+
 			IOUtils::binary_read(in_stream_, num_nodes_in_subcomponent, data_types_in_file.local_index_size);
+			if (num_nodes_in_subcomponent != subcomponent_info.num_nodes_in_subcomponent)
+			{
+				throw _MSG_EXCEPT_C("The # of nodes in a subcomponet did not match the value in the JSON.");
+			}
 			IOUtils::binary_read(in_stream_, subcomponent.nodes_in_subcomponent, num_nodes_in_subcomponent, data_types_in_file.local_index_size);
+
 			IOUtils::binary_read(in_stream_, num_elements_in_subcomponent, data_types_in_file.local_index_size);
+			if (num_elements_in_subcomponent != subcomponent_info.num_elements_in_subcomponent)
+			{
+				throw _MSG_EXCEPT_C("The # of elements in a subcomponet did not match the value in the JSON.");
+			}
 			IOUtils::binary_read(in_stream_, subcomponent.elements_in_subcomponent, num_elements_in_subcomponent, data_types_in_file.local_index_size);
+
 			IOUtils::binary_read(in_stream_, num_lcs_params_in_subcomponent, data_types_in_file.local_index_size);
 			IOUtils::binary_read(in_stream_, subcomponent.lcs_parameters_in_subcomponent, num_lcs_params_in_subcomponent, data_types_in_file.coord_type_size);
 

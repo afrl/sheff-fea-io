@@ -23,6 +23,11 @@
 #include "vtkUnstructuredGrid.h"
 #include "vtkCellType.h"
 #include "vtkSmartPointer.h"
+#include "vtkCompositeDataIterator.h"
+#include "vtkCellIterator.h"
+#include "vtkSelection.h"
+#include "vtkSelectionNode.h"
+#include "vtkExtractCells.h"
 // VTK arrays used
 #include "vtkShortArray.h"
 #include "vtkIntArray.h"
@@ -198,7 +203,11 @@ void vtkFEAIOReader::SetVolumeLOD(const char * VolumeLODName)
 	{
 		if (this->VolumeLODList->GetValue(i) == selectedVolumeLOD)
 		{
-			SelectedVolumeLevel = i;
+			if (SelectedVolumeLevel != i)
+			{
+				this->Modified();
+				SelectedVolumeLevel = i;
+			}
 		}
 	}
 
@@ -443,7 +452,7 @@ vtkFEAIOReader::vtkFEAIOReader()
 	this->SetNumberOfOutputPorts(1);
 
 	VolumeMultiBlockStructure = vtkMultiBlockDataSet::New();
-	VolumeThreshold = vtkMultiThreshold::New();
+	OutputMultiBlockStructure = VolumeMultiBlockStructure->NewInstance();
 	SelectedVolumeLevel = 0;
 }
 
@@ -606,28 +615,54 @@ int vtkFEAIOReader::RequestData(
 			}
 		} // End loop over partitions
 
-		// Filter to the selected level of detail
-		int intervalSets[2];
-		// "RelativeLevel" in [0, SelectedLevel] 
-		intervalSets[0] = VolumeThreshold->AddIntervalSet(
-			0, SelectedLevel,
-			vtkMultiThreshold::CLOSED, vtkMultiThreshold::OPEN,
-     		vtkDataObject::FIELD_ASSOCIATION_POINTS,
-			"RelativeLevel", 0, 1 );
-		// Or "RelativeLevel" == -(SelectedLevel + 1)
-		intervalSets[1] = VolumeThreshold->AddIntervalSet(
-			-(SelectedLevel + 1), -(SelectedLevel + 1),
-			vtkMultiThreshold::CLOSED, vtkMultiThreshold::CLOSED,
-     		vtkDataObject::FIELD_ASSOCIATION_POINTS,
-			"RelativeLevel", 0, 1 );
+		OutputMultiBlockStructure->CopyStructure(VolumeMultiBlockStructure);
+		auto blockIter = VolumeMultiBlockStructure->NewIterator();
+		blockIter->SkipEmptyNodesOn();
+		for (blockIter->InitTraversal(); !blockIter->IsDoneWithTraversal(); blockIter->GoToNextItem())
+		{
+			auto dataObject = blockIter->GetCurrentDataObject();
+			if (dataObject->IsA("vtkUnstructuredGrid"))
+			{
+				// Get the ids of cells to keep
+				// It must be between 0 and the selected level
+				// OR equal to -(selected level + 1)
+				vtkSmartPointer<vtkIdList> cellIdsToKeep = vtkSmartPointer<vtkIdList>::New();
 
-		int orBoolean = VolumeThreshold->AddBooleanSet(
-			vtkMultiThreshold::OR, 2, &intervalSets[0]);)
-		int outputGridIndex = VolumeThreshold->OuptutSet(orBoolean);
+				auto unstructuredGrid = vtkUnstructuredGrid::SafeDownCast(dataObject);
+				auto relativeLevelData = vtkShortArray::SafeDownCast(
+					unstructuredGrid->GetCellData()->GetArray("RelativeLevel"));
 
-		VolumeThreshold->SetInputData(VolumeMultiBlockStructure);
-		VolumeThreshold->SetOutput(outInfo->Get(vtkMultiBlockDataSet::DATA_OBJECT()));
-		VolumeThreshold->Update();
+				auto cellIter = unstructuredGrid->NewCellIterator();
+				for (cellIter->InitTraversal(); !cellIter->IsDoneWithTraversal(); cellIter->GoToNextCell())
+				{
+					auto cellId = cellIter->GetCellId();
+					auto relativeLevel = relativeLevelData->GetValue(cellId);
+					if ((relativeLevel >= 0 && relativeLevel <= SelectedVolumeLevel)
+						|| (relativeLevel == -(SelectedVolumeLevel + 1)))
+					{
+						cellIdsToKeep->InsertNextId(cellId);
+					}
+				}
+				cellIter->Delete();
+
+				OutputMultiBlockStructure->SetDataSet(blockIter, unstructuredGrid->New());
+
+				vtkSmartPointer<vtkExtractCells> extraction = vtkSmartPointer<vtkExtractCells>::New();
+				extraction->SetInputData(unstructuredGrid);
+				extraction->SetCellList(cellIdsToKeep);
+				extraction->SetOutput(OutputMultiBlockStructure->GetDataSet(blockIter));
+				extraction->Update();
+			}
+			else
+			{
+				vtkErrorMacro(<< "This implementation only works with composite data sets of vtkUnstructuredGrid, but "
+					<< blockIter->GetCurrentDataObject()->GetClassName()
+					<< "was encountered.");
+			}
+		}
+		blockIter->Delete();
+
+		outInfo->Set(vtkMultiBlockDataSet::DATA_OBJECT(), OutputMultiBlockStructure);
 
 #ifdef USE_TRY
     }

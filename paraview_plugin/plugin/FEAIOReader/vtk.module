@@ -5,3 +5,4 @@ DEPENDS
 PRIVATE_DEPENDS
   VTK::CommonCore
   VTK::FiltersGeneral
+  VTK::FiltersExtraction

@@ -248,13 +248,15 @@ namespace fea_io
 		// Write the high-level information about the partition
 		IOUtils::binary_write(out_stream_, partition.partition_id);
 		// Write the node information
-		for (GlobalIndex i = 0; i < static_cast<GlobalIndex>(partition.node_global_ids.size()); i++) {
+		for (GlobalIndex i = 0; i < static_cast<GlobalIndex>(partition.node_global_ids.size()); i++)
+		{
 			IOUtils::binary_write(out_stream_, partition.node_global_ids[i]);
 			IOUtils::binary_write(out_stream_, partition.node_parent_partitions[i]);
 			IOUtils::binary_write(out_stream_, &partition.node_coords[meta_info_.dimensionality*i], meta_info_.dimensionality);
 		}
 		// Write the element information
-		for (GlobalIndex i = 0; i < static_cast<GlobalIndex>(partition.element_global_ids.size()); i++) {
+		for (GlobalIndex i = 0; i < static_cast<GlobalIndex>(partition.element_global_ids.size()); i++)
+		{
 			IOUtils::binary_write(out_stream_, partition.element_global_ids[i]);
 			IOUtils::binary_write(out_stream_, partition.element_parent_partitions[i]);
 			IOUtils::binary_write(out_stream_, static_cast<std::underlying_type<ElementType>::type>(partition.element_types[i]));
@@ -262,12 +264,13 @@ namespace fea_io
 		}
 		// Write the subcomponent information
 		LocalIndex subcomonent_index = 0;
-		for (auto& subcomponent : partition.subcomponents) {
+		for (auto& subcomponent : partition.subcomponents)
+		{
 			// Note: it was already tested that the component id exists in the meta_info
-			auto component = *std::find_if(meta_info_.components.begin(), meta_info_.components.end(),
-				[id = subcomponent.component_id](const ComponentInfo<LocalIndex>& x) -> bool {
-				return x.id == id;
-			});
+			//auto component = *std::find_if(meta_info_.components.begin(), meta_info_.components.end(),
+			//	[id = subcomponent.component_id](const ComponentInfo<LocalIndex>& x) -> bool {
+			//	return x.id == id;
+			//});
 
 			IOUtils::binary_write(out_stream_, subcomonent_index);
 			IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(subcomponent.nodes_in_subcomponent.size()));
