@@ -63,6 +63,7 @@ namespace fea_io
 	struct ArrayInfo;
 	struct MeshObject;
 	class MetaReader;
+	enum class MeshObjectType;
 }
 
 class FEAIOREADERS_EXPORT vtkFEAIOReader : public vtkMultiBlockDataSetAlgorithm
@@ -236,8 +237,12 @@ protected:
 	// time step for the volume.  This is actually filtered by VolumeThreshold
 	// before it is supplied to the output of this source.
 	vtkSmartPointer<vtkMultiBlockDataSet> VolumeMultiBlockStructure;
-	vtkSmartPointer<vtkMultiBlockDataSet> OutputMultiBlockStructure;
+	vtkSmartPointer<vtkMultiBlockDataSet> OutputVolumeMultiBlockStructure;
 	int SelectedVolumeLevel;
+
+	vtkSmartPointer<vtkMultiBlockDataSet> SurfaceMultiBlockStructure;
+	vtkSmartPointer<vtkMultiBlockDataSet> OutputSurfaceMultiBlockStructure;
+	int SelectedSurfaceLevel;
 
 private:
 	vtkFEAIOReader(const vtkFEAIOReader&) = delete;
@@ -252,7 +257,8 @@ private:
 	void UpdateComponents();
 	/// Updates the output with the requested time, and returns the closest time
 	/// in the data to the requested time.
-	std::pair<int, double> UpdateTime(vtkSmartPointer<vtkInformation>& outInfo,
+	std::pair<int, double> UpdateTime(
+		vtkSmartPointer<vtkInformation>& outInfo,
 		vtkSmartPointer<vtkMultiBlockDataSet>& output);
 
 	/// After request data has been called, but a property of the reader (the GUI
@@ -288,6 +294,8 @@ private:
 		const std::vector<short>& cellRelativeLevels,
 		const fea_io::MeshInfo<IndexType, IndexType, CoordType>* meshInfoPtr,
 		const fea_io::Partition<IndexType, IndexType, CoordType>* currPartitionPtr,
+		vtkDataArraySelection* PointDataArraySelection,
+		vtkDataArraySelection* CellDataArraySelection,
 		const std::vector<ArrayReaderPair>& arrayPairs);
 
 	template<typename ValueType, typename VTKArrayType>
@@ -304,4 +312,18 @@ private:
 		const int currLevelOfDetailBlockID,
 		const fea_io::Partition<IndexType, IndexType, CoordType>* currPartition,
 		const ArrayReaderPair& arrayReaderPair);
+
+	void SetupAndReadMultiblock(
+		const int currTimeIndex,
+		const int numLevelsOfDetail,
+		const fea_io::MetaReader * metaReaderPtr,
+		const fea_io::MeshObjectType * typePtr,
+		vtkDataArraySelection* PointDataArraySelection,
+		vtkDataArraySelection* CellDataArraySelection,
+		vtkSmartPointer<vtkMultiBlockDataSet>& output);
+
+	void UpdateOutput(
+		vtkSmartPointer<vtkMultiBlockDataSet>& input,
+		vtkSmartPointer<vtkMultiBlockDataSet>& output,
+		const int selectedLevel);
 };

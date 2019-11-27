@@ -37,6 +37,7 @@ namespace fea_io
 			// To to figure out how to handle quadratic cohesive elements
 			//typeMap[fea_io::ElementType::C3D16N] = ;
 			// Other
+			typeMap[fea_io::ElementType::POLYGON] = VTK_POLYGON;
 			typeMap[fea_io::ElementType::POLYHEDRON] = VTK_POLYHEDRON;
 		}
 		else

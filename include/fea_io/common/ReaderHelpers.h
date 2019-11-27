@@ -79,6 +79,12 @@ namespace fea_io
 					mesh_objects.push_back(mesh_object);
 				}
 			}
+
+			// If one was not found, give an empty mesh object
+			if (!found_object)
+			{
+				mesh_objects.push_back({ type, "", {}, {} });
+			}
 		}
 		return mesh_objects;
 	}
@@ -117,7 +123,10 @@ namespace fea_io
         if (lod_rev_index != lod_rev_mesh_objects.size() - 1
 			&& lods_reversed[lod_rev_index].relationship_with_parent == LODParentRelation::ConformingOverlapping)
         {
-            parent_mesh_obj_ptr = &(lod_rev_mesh_objects[lod_rev_index + 1]);
+			if (lod_rev_mesh_objects[lod_rev_index + 1].mesh_path != "")
+			{
+				parent_mesh_obj_ptr = &(lod_rev_mesh_objects[lod_rev_index + 1]);
+			}
         }
 
         // Allocate active map for parent LOD
@@ -130,7 +139,7 @@ namespace fea_io
             auto& partition_info = mesh_reader.get_partition_info();
 			lod_w_part.parent_element_relative_levels.resize(
                 partition_info[partition].num_elements,
-				static_cast<short>(lod_rev_index - 1));
+				static_cast<short>(lods_reversed[lod_rev_index + 1].level));
         }
 
 		lod_w_part.mesh_object = mesh_object;

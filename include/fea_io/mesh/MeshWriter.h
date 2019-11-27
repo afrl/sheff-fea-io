@@ -260,6 +260,11 @@ namespace fea_io
 			IOUtils::binary_write(out_stream_, partition.element_global_ids[i]);
 			IOUtils::binary_write(out_stream_, partition.element_parent_partitions[i]);
 			IOUtils::binary_write(out_stream_, static_cast<std::underlying_type<ElementType>::type>(partition.element_types[i]));
+			if (partition.element_types[i] == ElementType::POLYHEDRON
+				|| partition.element_types[i] == ElementType::POLYGON)
+			{
+				IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(partition.element_connectivities[i].size()));
+			}
 			IOUtils::binary_write(out_stream_, partition.element_connectivities[i]);
 		}
 		// Write the subcomponent information

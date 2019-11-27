@@ -94,7 +94,7 @@ DataArrayNames GetDataArrayNames(
 			{
 				if (meshObject.type == typeToFind)
 				{
-					auto dataPaths = ts.levels_of_detail[0].mesh_objects[0].data_paths;
+					auto dataPaths = meshObject.data_paths;
 					for (auto& path : dataPaths)
 					{
 						fea_io::DataReader dataReader(metaReader.get_adjusted_path(path));
@@ -210,7 +210,6 @@ void vtkFEAIOReader::SetVolumeLOD(const char * VolumeLODName)
 			}
 		}
 	}
-
 }
 
 /////////////////////////////////
@@ -223,7 +222,19 @@ vtkStringArray * vtkFEAIOReader::GetSurfaceLODList()
 
 void vtkFEAIOReader::SetSurfaceLOD(const char * SurfaceLODName)
 {
-	PRINT_DEBUG_STR("Set volume lod: " + std::string(SurfaceLODName));
+	PRINT_DEBUG_STR("Set surface lod: " + std::string(SurfaceLODName));
+	std::string selectedSurfaceLOD(SurfaceLODName);
+	for (auto i = 0; i < this->SurfaceLODList->GetNumberOfValues(); i++)
+	{
+		if (this->SurfaceLODList->GetValue(i) == selectedSurfaceLOD)
+		{
+			if (SelectedSurfaceLevel != i)
+			{
+				this->Modified();
+				SelectedSurfaceLevel = i;
+			}
+		}
+	}
 }
 
 
@@ -416,7 +427,6 @@ vtkFEAIOReader::vtkFEAIOReader()
 	CurrentOutputVector = nullptr;
     this->FileName = nullptr;
 	this->Rank = 0;
-    this->SetNumberOfInputPorts(0);
 
 	this->VolumeLODList = vtkStringArray::New();
 	this->SurfaceLODList = vtkStringArray::New();
@@ -449,11 +459,15 @@ vtkFEAIOReader::vtkFEAIOReader()
 	this->SurfaceCellDataArraySelection->AddObserver(
 		vtkCommand::ModifiedEvent, this->SelectionObserver);
 	this->SetNumberOfInputPorts(0);
-	this->SetNumberOfOutputPorts(1);
+	this->SetNumberOfOutputPorts(2);
 
 	VolumeMultiBlockStructure = vtkMultiBlockDataSet::New();
-	OutputMultiBlockStructure = VolumeMultiBlockStructure->NewInstance();
+	OutputVolumeMultiBlockStructure = VolumeMultiBlockStructure->NewInstance();
 	SelectedVolumeLevel = 0;
+
+	SurfaceMultiBlockStructure = vtkMultiBlockDataSet::New();
+	OutputSurfaceMultiBlockStructure = SurfaceMultiBlockStructure->NewInstance();
+	SelectedSurfaceLevel = 0;
 }
 
 vtkFEAIOReader::~vtkFEAIOReader()
@@ -476,27 +490,42 @@ int vtkFEAIOReader::RequestInformation(
 	vtkInformationVector* outputVector)
 {
 	ReadMetaInformation();
-	vtkInformation* outInfo = outputVector->GetInformationObject(0);
-	outInfo->Set(CAN_HANDLE_PIECE_REQUEST(), 1);
+
+	for (auto i = 0; i < outputVector->GetNumberOfInformationObjects(); i++)
+	{
+		outputVector->GetInformationObject(i)->Set(CAN_HANDLE_PIECE_REQUEST(), 1);
+	}
+
 	PRINT_DEBUG_STR("Request Info time step size: " + std::to_string(TimestepValues.size()));
 	// Tell ParaView what time steps are availble if there are multiple
 	if (TimestepValues.size() > 1)
 	{
 		double timeRange[2] = { TimestepValues.front() , TimestepValues.back() };
-		outInfo->Set(vtkStreamingDemandDrivenPipeline::TIME_STEPS(),
-			&this->TimestepValues[0],
-			static_cast<int>(TimestepValues.size()));
-		PRINT_DEBUG_STR("Set number of time steps to " + std::to_string(TimestepValues.size()));
 
-		outInfo->Set(vtkStreamingDemandDrivenPipeline::TIME_RANGE(), timeRange, 2);
+		for (auto i = 0; i < outputVector->GetNumberOfInformationObjects(); i++)
+		{
+			outputVector->GetInformationObject(i)->Set(
+				vtkStreamingDemandDrivenPipeline::TIME_STEPS(),
+				&this->TimestepValues[0],
+				static_cast<int>(TimestepValues.size()));
+
+			outputVector->GetInformationObject(i)->Set(
+				vtkStreamingDemandDrivenPipeline::TIME_RANGE(),
+				timeRange,
+				2);
+		}
+		PRINT_DEBUG_STR("Set number of time steps to " + std::to_string(TimestepValues.size()));
 		PRINT_DEBUG_STR("Set time range " + std::to_string(timeRange[0]) + " to " + std::to_string(timeRange[1]));
 	}
 	else
 	{
 		// If there is not more than 1 time step, then indicate that this data
 		// not time dependant.
-		outInfo->Remove(vtkStreamingDemandDrivenPipeline::TIME_STEPS());
-		outInfo->Remove(vtkStreamingDemandDrivenPipeline::TIME_RANGE());
+		for (auto i = 0; i < outputVector->GetNumberOfInformationObjects(); i++)
+		{
+			outputVector->GetInformationObject(i)->Remove(vtkStreamingDemandDrivenPipeline::TIME_STEPS());
+			outputVector->GetInformationObject(i)->Remove(vtkStreamingDemandDrivenPipeline::TIME_RANGE());
+		}
 	}
 
 	return 1;
@@ -521,25 +550,13 @@ int vtkFEAIOReader::RequestData(
 
 	CurrentOutputVector = outputVector;
 
-    // Get the info object
-    vtkSmartPointer<vtkInformation> outInfo = outputVector->GetInformationObject(0);
-	this->UpdateMyPartitions(outInfo);
-	this->UpdateComponents();
-
 	// For debug purposes, echo the active properties
 	if (this->Rank == 0)
 	{
 		PRINT_DEBUG_STR(std::string("Request Data Called."));
 	}
 
-	// Consider checking if the block structure needs to change for subsequent RequestData calls.  Right now, it will
-	// just clear the structure and recreate it.
-	VolumeMultiBlockStructure->Initialize();
-
-    // Get the time ID closet to the time requested
-	auto timePair = UpdateTime(outInfo, VolumeMultiBlockStructure);
-	auto currentTimeIndex = timePair.first;
-	CurrentTime = timePair.second;
+	this->UpdateComponents();
 
 #ifdef USE_TRY
     try {
@@ -549,120 +566,75 @@ int vtkFEAIOReader::RequestData(
 		fea_io::MetaReader metaReader;
 		metaReader.open(std::string(FileName));
 		auto& analysisMetaInfo = metaReader.get_analysis_meta();
-		auto& currTimeStep = analysisMetaInfo.timesteps[currentTimeIndex];
 		auto numLevelsOfDetail = analysisMetaInfo.levels_of_detail_names.size();
 
-		// Create the unstructured grid for each partition of each mesh object for each
-		// level of detail for each component.
-		SetupMultiblock(VolumeMultiBlockStructure,
-			this->ComponentsNeeded,
-			numLevelsOfDetail,
-			this->PartitionSelection->GetNumberOfArrays(),
-			fea_io::MeshObjectType::Volume);
-
-		// Get the levels of detail in reverse order in order to determine the cells in the
-		// parent level that should be skipped
-		auto relevantLoDsSorted =
-			fea_io::get_reversed_lods<IndexType, IndexType, CoordType>(metaReader, currentTimeIndex);
-		auto lodMeshObjects = fea_io::get_mesh_obj_for_each_level(
-			relevantLoDsSorted,
-			fea_io::MeshObjectType::Volume);
-
-		std::vector<fea_io::MeshInfo<IndexType, IndexType, CoordType>> meshInfoByLevel;
-		std::vector<std::vector<ArrayReaderPair>> arrayReadersByLevel;
-		std::vector<std::unique_ptr<fea_io::DataReader>> dataReaderPtrs;
-		for (auto i = 0; i < lodMeshObjects.size(); i++)
+		// Create volume output
 		{
-			fea_io::MeshReader<IndexType, IndexType, CoordType> meshReader(
-				metaReader.get_adjusted_path(lodMeshObjects[i].mesh_path));
-			meshInfoByLevel.push_back(meshReader.get_mesh_info());
+			// Get the info object
+			vtkSmartPointer<vtkInformation> outInfo = outputVector->GetInformationObject(0);
+			this->UpdateMyPartitions(outInfo);
 
-			arrayReadersByLevel.push_back(this->GetDataArrayReaders(
-				&metaReader, &lodMeshObjects[i], dataReaderPtrs));
+			// Consider checking if the block structure needs to change for subsequent RequestData calls.
+			// Right now, it will just clear the structure and recreate it.
+			this->VolumeMultiBlockStructure->Initialize();
+
+			// Get the time ID closet to the time requested
+			auto timePair = this->UpdateTime(outInfo,
+				this->VolumeMultiBlockStructure);
+			auto currentTimeIndex = timePair.first;
+			CurrentTime = timePair.second;
+
+			auto volumeType = fea_io::MeshObjectType::Volume;
+			SetupAndReadMultiblock(
+				currentTimeIndex,
+				numLevelsOfDetail,
+				&metaReader,
+				&volumeType,
+				this->VolumePointDataArraySelection,
+				this->VolumeCellDataArraySelection,
+				this->VolumeMultiBlockStructure);
+
+			UpdateOutput(
+				this->VolumeMultiBlockStructure,
+				this->OutputVolumeMultiBlockStructure,
+				this->SelectedVolumeLevel);
+
+			outInfo->Set(vtkMultiBlockDataSet::DATA_OBJECT(), OutputVolumeMultiBlockStructure);
 		}
 
-		// Read what group files exist (Need to finish group implementation)
-		//auto groupFilePaths = metaReader.get_group_file_paths(timeID);
-
-		// Though the structure has the components at the top and then partitions, we will
-		// loop over partitions then domains for more efficient I/O
-		for (auto partitionIndex : this->MyPartitionIndices)
+		// Create surface output
 		{
-			auto partID = this->AllPartitionsNeeded[partitionIndex];
+			// Get the info object
+			vtkSmartPointer<vtkInformation> outInfo = outputVector->GetInformationObject(1);
+			this->UpdateMyPartitions(outInfo);
 
-			std::vector<short> lastParentElementRelativeLevels;
-			for (auto i = 0; i < lodMeshObjects.size(); i++)
-			{
-				auto lodWithPart = fea_io::read_level_of_detail_helper<IndexType, IndexType, CoordType>(
-					metaReader,
-					relevantLoDsSorted,
-					lodMeshObjects,
-					i, // index of relevantLoDsSorted to read
-					partID,
-					fea_io::MeshObjectType::Volume);
+			// Consider checking if the block structure needs to change for subsequent RequestData calls.
+			// Right now, it will just clear the structure and recreate it.
+			this->SurfaceMultiBlockStructure->Initialize();
 
-				// This is the main method that creates a mesh with data for each subcomponent
-				// in this partition.
-				CreateBlocksForPartitionByComponent(
-					VolumeMultiBlockStructure,
-					relevantLoDsSorted[i].level,
-					lastParentElementRelativeLevels,
-					&meshInfoByLevel[i],
-					&lodWithPart.mesh_object_part,
-					arrayReadersByLevel[i]);
+			// Get the time ID closet to the time requested
+			auto timePair = this->UpdateTime(outInfo,
+				this->SurfaceMultiBlockStructure);
+			auto currentTimeIndex = timePair.first;
+			CurrentTime = timePair.second;
 
-				lastParentElementRelativeLevels.swap(lodWithPart.parent_element_relative_levels);
-			}
-		} // End loop over partitions
+			auto surfaceType = fea_io::MeshObjectType::Surface;
+			SetupAndReadMultiblock(
+				currentTimeIndex,
+				numLevelsOfDetail,
+				&metaReader,
+				&surfaceType,
+				this->SurfacePointDataArraySelection,
+				this->SurfaceCellDataArraySelection,
+				this->SurfaceMultiBlockStructure);
 
-		OutputMultiBlockStructure->CopyStructure(VolumeMultiBlockStructure);
-		auto blockIter = VolumeMultiBlockStructure->NewIterator();
-		blockIter->SkipEmptyNodesOn();
-		for (blockIter->InitTraversal(); !blockIter->IsDoneWithTraversal(); blockIter->GoToNextItem())
-		{
-			auto dataObject = blockIter->GetCurrentDataObject();
-			if (dataObject->IsA("vtkUnstructuredGrid"))
-			{
-				// Get the ids of cells to keep
-				// It must be between 0 and the selected level
-				// OR equal to -(selected level + 1)
-				vtkSmartPointer<vtkIdList> cellIdsToKeep = vtkSmartPointer<vtkIdList>::New();
+			UpdateOutput(
+				this->SurfaceMultiBlockStructure,
+				this->OutputSurfaceMultiBlockStructure,
+				this->SelectedSurfaceLevel);
 
-				auto unstructuredGrid = vtkUnstructuredGrid::SafeDownCast(dataObject);
-				auto relativeLevelData = vtkShortArray::SafeDownCast(
-					unstructuredGrid->GetCellData()->GetArray("RelativeLevel"));
-
-				auto cellIter = unstructuredGrid->NewCellIterator();
-				for (cellIter->InitTraversal(); !cellIter->IsDoneWithTraversal(); cellIter->GoToNextCell())
-				{
-					auto cellId = cellIter->GetCellId();
-					auto relativeLevel = relativeLevelData->GetValue(cellId);
-					if ((relativeLevel >= 0 && relativeLevel <= SelectedVolumeLevel)
-						|| (relativeLevel == -(SelectedVolumeLevel + 1)))
-					{
-						cellIdsToKeep->InsertNextId(cellId);
-					}
-				}
-				cellIter->Delete();
-
-				OutputMultiBlockStructure->SetDataSet(blockIter, unstructuredGrid->New());
-
-				vtkSmartPointer<vtkExtractCells> extraction = vtkSmartPointer<vtkExtractCells>::New();
-				extraction->SetInputData(unstructuredGrid);
-				extraction->SetCellList(cellIdsToKeep);
-				extraction->SetOutput(OutputMultiBlockStructure->GetDataSet(blockIter));
-				extraction->Update();
-			}
-			else
-			{
-				vtkErrorMacro(<< "This implementation only works with composite data sets of vtkUnstructuredGrid, but "
-					<< blockIter->GetCurrentDataObject()->GetClassName()
-					<< "was encountered.");
-			}
+			outInfo->Set(vtkMultiBlockDataSet::DATA_OBJECT(), OutputSurfaceMultiBlockStructure);
 		}
-		blockIter->Delete();
-
-		outInfo->Set(vtkMultiBlockDataSet::DATA_OBJECT(), OutputMultiBlockStructure);
 
 #ifdef USE_TRY
     }
@@ -1011,7 +983,16 @@ void vtkFEAIOReader::CreateVTKMesh(
 		{
 			vtkErrorMacro("VTK mapping not found.");
 		}
-		mesh->InsertNextCell(ct, idsReordered.size(), &(idsReordered[0]));
+		if (elemType != fea_io::ElementType::POLYHEDRON)
+		{
+			mesh->InsertNextCell(ct, idsReordered.size(), &(idsReordered[0]));
+		}
+		else
+		{
+			// VTK requires a different interface for polyhedron cells
+			//  ( cell type, number of faces, face stream )
+			mesh->InsertNextCell(ct, idsReordered[0], &(idsReordered[1]));
+		}
 	}
 
 	// Create point ghost information
@@ -1044,6 +1025,8 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(
 	const std::vector<short>& cellRelativeLevels,
 	const fea_io::MeshInfo<IndexType, IndexType, CoordType>* meshInfoPtr,
 	const fea_io::Partition<IndexType, IndexType, CoordType>* currPartitionPtr,
+	vtkDataArraySelection* PointDataArraySelection,
+	vtkDataArraySelection* CellDataArraySelection,
 	const std::vector<ArrayReaderPair>& arrayPairs)
 {
 	auto& meshInfo = *meshInfoPtr;
@@ -1094,7 +1077,7 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(
 		}
 
 		// Create point array for global numbers
-		if (this->VolumePointDataArraySelection->ArrayIsEnabled("GlobalIDs"))
+		if (PointDataArraySelection->ArrayIsEnabled("GlobalIDs"))
 		{
 			mesh->GetPointData()->AddArray(
 				CreatePartitionArrayForComponent<VTKIndexArrayType>(
@@ -1105,7 +1088,7 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(
 		}
 
 		// Create point array for owning partition
-		if (this->VolumePointDataArraySelection->ArrayIsEnabled("PartitionIDs"))
+		if (PointDataArraySelection->ArrayIsEnabled("PartitionIDs"))
 		{
 			mesh->GetPointData()->AddArray(
 				CreatePartitionArrayForComponent<VTKIndexArrayType>(
@@ -1116,7 +1099,7 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(
 		}
 
 		// Create cell array for global numbers
-		if (this->VolumeCellDataArraySelection->ArrayIsEnabled("GlobalIDs"))
+		if (CellDataArraySelection->ArrayIsEnabled("GlobalIDs"))
 		{
 			mesh->GetCellData()->AddArray(
 				CreatePartitionArrayForComponent<VTKIndexArrayType>(
@@ -1127,7 +1110,7 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(
 		}
 
 		// Create cell array for owning partition
-		if (this->VolumeCellDataArraySelection->ArrayIsEnabled("PartitionIDs"))
+		if (CellDataArraySelection->ArrayIsEnabled("PartitionIDs"))
 		{
 			mesh->GetCellData()->AddArray(
 				CreatePartitionArrayForComponent<VTKIndexArrayType>(
@@ -1138,7 +1121,7 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(
 		}
 
 		// Create cell array for domain
-		if (this->VolumeCellDataArraySelection->ArrayIsEnabled("ComponentIDs"))
+		if (CellDataArraySelection->ArrayIsEnabled("ComponentIDs"))
 		{
 			mesh->GetCellData()->AddArray(
 				CreatePartitionArrayForComponent<VTKIndexArrayType>(
@@ -1148,7 +1131,8 @@ void vtkFEAIOReader::CreateBlocksForPartitionByComponent(
 		}
 
 		// Create vectors for the local coordinate systems
-		if (this->VolumePointDataArraySelection->ArrayIsEnabled("LocalCoordinateSystems") || this->VolumeCellDataArraySelection->ArrayIsEnabled("LocalCoordinateSystems")) {
+		if (PointDataArraySelection->ArrayIsEnabled("LocalCoordinateSystems")
+			|| CellDataArraySelection->ArrayIsEnabled("LocalCoordinateSystems")) {
 			// Find the corresponding component in meshInfo for this subcomponent
 			auto findIter = std::find_if(meshInfo.components.begin(), meshInfo.components.end(),
 				[id = subcomponent.component_id](const auto& c) -> bool {
@@ -1360,3 +1344,147 @@ void vtkFEAIOReader::CreateDataArrayForSubcomponents(
 	}
 }
 
+void vtkFEAIOReader::SetupAndReadMultiblock(
+	const int currTimeIndex,
+	const int numLevelsOfDetail,
+	const fea_io::MetaReader * metaReaderPtr,
+	const fea_io::MeshObjectType * typePtr,
+	vtkDataArraySelection* PointDataArraySelection,
+	vtkDataArraySelection* CellDataArraySelection,
+	vtkSmartPointer<vtkMultiBlockDataSet>& output)
+{
+
+	// Create the unstructured grid for each partition of each mesh object for each
+	// level of detail for each component.
+	SetupMultiblock(output,
+		this->ComponentsNeeded,
+		numLevelsOfDetail,
+		this->PartitionSelection->GetNumberOfArrays(),
+		*typePtr);
+
+	// Get the levels of detail in reverse order in order to determine the cells in the
+	// parent level that should be skipped
+	auto relevantLoDsSorted =
+		fea_io::get_reversed_lods<IndexType, IndexType, CoordType>(*metaReaderPtr, currTimeIndex);
+	auto lodMeshObjects = fea_io::get_mesh_obj_for_each_level(
+		relevantLoDsSorted,
+		*typePtr);
+
+	std::vector<fea_io::MeshInfo<IndexType, IndexType, CoordType>> meshInfoByLevel;
+	std::vector<std::vector<ArrayReaderPair>> arrayReadersByLevel;
+	std::vector<std::unique_ptr<fea_io::DataReader>> dataReaderPtrs;
+	for (auto i = 0; i < lodMeshObjects.size(); i++)
+	{
+		if (lodMeshObjects[i].mesh_path != "")
+		{
+			fea_io::MeshReader<IndexType, IndexType, CoordType> meshReader(
+				metaReaderPtr->get_adjusted_path(lodMeshObjects[i].mesh_path));
+			meshInfoByLevel.push_back(meshReader.get_mesh_info());
+
+			arrayReadersByLevel.push_back(this->GetDataArrayReaders(
+				metaReaderPtr, &lodMeshObjects[i], dataReaderPtrs));
+		}
+		else
+		{
+			arrayReadersByLevel.push_back({});
+		}
+	}
+
+	// Read what group files exist (Need to finish group implementation)
+	//auto groupFilePaths = metaReader.get_group_file_paths(timeID);
+
+	// Though the structure has the components at the top and then partitions, we will
+	// loop over partitions then domains for more efficient I/O
+	for (auto partitionIndex : this->MyPartitionIndices)
+	{
+		auto partID = this->AllPartitionsNeeded[partitionIndex];
+
+		std::vector<short> lastParentElementRelativeLevels;
+		for (auto i = 0; i < lodMeshObjects.size(); i++)
+		{
+			if (lodMeshObjects[i].mesh_path != "")
+			{
+				auto lodWithPart = fea_io::read_level_of_detail_helper<IndexType, IndexType, CoordType>(
+					*metaReaderPtr,
+					relevantLoDsSorted,
+					lodMeshObjects,
+					i, // index of relevantLoDsSorted to read
+					partID,
+					*typePtr);
+
+				// This is the main method that creates a mesh with data for each subcomponent
+				// in this partition.
+				CreateBlocksForPartitionByComponent(
+					output,
+					relevantLoDsSorted[i].level,
+					lastParentElementRelativeLevels,
+					&meshInfoByLevel[i],
+					&lodWithPart.mesh_object_part,
+					PointDataArraySelection,
+					CellDataArraySelection,
+					arrayReadersByLevel[i]);
+
+				lastParentElementRelativeLevels.swap(lodWithPart.parent_element_relative_levels);
+			}
+			else
+			{
+				lastParentElementRelativeLevels.clear();
+			}
+		}
+	} // End loop over partitions
+}
+
+void vtkFEAIOReader::UpdateOutput(
+	vtkSmartPointer<vtkMultiBlockDataSet>& input, 
+	vtkSmartPointer<vtkMultiBlockDataSet>& output,
+	const int selectedLevel)
+{
+	// Filter the volume mesh based on the level of detail selected
+	output->CopyStructure(input);
+	auto blockIter = input->NewIterator();
+	blockIter->SkipEmptyNodesOn();
+	for (blockIter->InitTraversal(); !blockIter->IsDoneWithTraversal(); blockIter->GoToNextItem())
+	{
+		auto dataObject = blockIter->GetCurrentDataObject();
+		if (dataObject->IsA("vtkUnstructuredGrid"))
+		{
+			auto unstructuredGrid = vtkUnstructuredGrid::SafeDownCast(dataObject);
+			auto relativeLevelData = vtkShortArray::SafeDownCast(
+				unstructuredGrid->GetCellData()->GetArray("RelativeLevel"));
+
+			// Get the ids of cells to keep
+			// It must be between 0 and the selected level
+			// OR equal to -(selected level + 1)
+			vtkSmartPointer<vtkIdList> cellIdsToKeep = vtkSmartPointer<vtkIdList>::New();
+			auto cellIter = unstructuredGrid->NewCellIterator();
+			for (cellIter->InitTraversal(); !cellIter->IsDoneWithTraversal(); cellIter->GoToNextCell())
+			{
+				auto cellId = cellIter->GetCellId();
+				auto relativeLevel = relativeLevelData->GetValue(cellId);
+				if ((relativeLevel >= 0 && relativeLevel <= selectedLevel)
+					|| (relativeLevel == -(selectedLevel + 1)))
+				{
+					cellIdsToKeep->InsertNextId(cellId);
+				}
+			}
+			cellIter->Delete();
+
+			output->SetDataSet(blockIter, unstructuredGrid->New());
+
+			// Extract the cells for this block from the input and put them
+			// in the new grid created in the output
+			vtkSmartPointer<vtkExtractCells> extraction = vtkSmartPointer<vtkExtractCells>::New();
+			extraction->SetInputData(unstructuredGrid);
+			extraction->SetCellList(cellIdsToKeep);
+			extraction->SetOutput(output->GetDataSet(blockIter));
+			extraction->Update();
+		}
+		else
+		{
+			vtkErrorMacro(<< "This implementation only works with composite data sets of vtkUnstructuredGrid, but "
+				<< blockIter->GetCurrentDataObject()->GetClassName()
+				<< "was encountered.");
+		}
+	}
+	blockIter->Delete();
+}

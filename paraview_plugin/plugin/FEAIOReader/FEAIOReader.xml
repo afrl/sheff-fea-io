@@ -196,6 +196,8 @@
             </Documentation>
         </DoubleVectorProperty>
 
+        <OutputPort name="Volume" index="0" id="port0" />
+        <OutputPort name="Surface" index="1" id="port1" />
         
         <Hints>
         <ReaderFactory extensions="x.json"

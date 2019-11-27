@@ -146,8 +146,12 @@ namespace fea_io
 			std::underlying_type<ElementType>::type element_type;
 			IOUtils::binary_read(in_stream_, element_type);
 			partition.element_types[i] = static_cast<ElementType>(element_type);
-			// THIS is a problem for polyhedra.  They have "0" nodes.
-			auto num_nodes_for_elem = get_num_nodes_for_type(partition.element_types[i]);
+			LocalIndex num_nodes_for_elem = get_num_nodes_for_type(partition.element_types[i]);
+			if (partition.element_types[i] == ElementType::POLYHEDRON
+				|| partition.element_types[i] == ElementType::POLYGON)
+			{
+				IOUtils::binary_read(in_stream_, num_nodes_for_elem);
+			}
 			IOUtils::binary_read(in_stream_, partition.element_connectivities[i], num_nodes_for_elem, data_types_in_file.local_index_size);
 		}
 
