@@ -4,7 +4,6 @@ cmake_minimum_required(VERSION 3.8)
 project(FEAIO VERSION 1.0.0 LANGUAGES C CXX)
 
 # Options
-option( FEAIO_BuildDev "Build the main.cpp in the dev folder. (intended for debugging this project by devs)" ON )
 option( FEAIO_BuildParaViewReader "Build ParaView reader for the JSON-binary format supported by the FEAIO project. (Requires having build ParaView from source)" OFF )
 option( FEAIO_BuildTests "Build the unit tests." ON )
 option( FEAIO_USE_MPI "Indicates if the MPI routines should be included in the build. (Required for parallel writing)." OFF )
@@ -12,7 +11,7 @@ option( FEAIO_UseFilesystemHack "Use if compiler does not have <experimental/fil
 
 # For debugging, print generator, compiler, and options
 message( STATUS "Gen: ${CMAKE_GENERATOR}, CXX: ${CMAKE_CXX_COMPILER_ID}, Mode: ${CMAKE_BUILD_TYPE}" )
-message( STATUS "Dev: ${FEAIO_BuildDev}, Tests: ${FEAIO_BuildTests}, MPI: ${FEAIO_USE_MPI}, ParaView: ${FEAIO_BuildParaViewReader}, FS HACK: ${FEAIO_UseFilesystemHack}" )
+message( STATUS "Tests: ${FEAIO_BuildTests}, MPI: ${FEAIO_USE_MPI}, ParaView: ${FEAIO_BuildParaViewReader}, FS HACK: ${FEAIO_UseFilesystemHack}" )
 
 ##################
 # Checking input #
@@ -108,11 +107,6 @@ endif()
 #######################################
 # Add dev and ParaView reader targets #
 #######################################
-
-# Build dev
-if(FEAIO_BuildDev)
-        add_subdirectory(dev)
-endif()
 
 # Build paraview plugin
 if(FEAIO_BuildParaViewReader)
