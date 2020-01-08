@@ -80,12 +80,11 @@ namespace filesystem {
             return *this; 
         }
 
-
         // Append string to path, with correct path separators.
         // In both VS and GNU, if original path does not end in a separator,
         // and append path does not start with a separator, then a separator
         // is added. Otherwise, paths are just concatenated.
-        inline path& append_path(const std::string& __s)
+        inline path& append(const std::string& __s)
         {
             if ((_pathname.at(_pathname.size()-1) != separator) &&
                 (__s.at(0) != separator))
@@ -96,16 +95,17 @@ namespace filesystem {
             return *this; 
         }
 
+
         // Append string to path
         inline path& operator/=(const std::string& __s) 
         {
-            return(append_path(__s)); 
+            return(append(__s)); 
         }
 
         // Append another path to path
         inline path& operator/=(const path& __p) 
         {
-            return(append_path(__p._pathname)); 
+            return(append(__p._pathname)); 
         }
 
         // Concatenate two paths
