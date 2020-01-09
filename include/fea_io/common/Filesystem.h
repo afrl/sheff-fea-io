@@ -26,9 +26,13 @@
 #else
 
 #include <iostream>
+#include <fstream>
 #include <stdio.h>    // defines FILENAME_MAX
 #include <string> 
+#include <string.h>   // provides strcmp
 #include <sys/stat.h> // provides stat and mkdir
+#include <dirent.h>   // provides dirent
+#include <system_error>
 
 // Platform-independent way to get current dir
 #if defined(_WIN32) && !defined(__CYGWIN__)
@@ -45,6 +49,13 @@
 namespace std {
 namespace experimental {
 namespace filesystem {
+
+
+#ifdef _GLIBCXX_FILESYSTEM_IS_WINDOWS 
+    static const char separator = '\\';
+#else
+    static const char separator = '/';
+#endif
 
     class path
     {
@@ -95,6 +106,12 @@ namespace filesystem {
             return *this; 
         }
 
+        // Evidently GCC filesystem doesn't define this
+        //inline path& append(const path& __p)
+        //{
+        //    return(append(__p._pathname)); 
+        //}
+
 
         // Append string to path
         inline path& operator/=(const std::string& __s) 
@@ -129,11 +146,38 @@ namespace filesystem {
             return(__result.string() == __s); 
         }
 
+        // Compare path to path
+        inline bool operator==(const path& __p)
+        {
+            path __result(*this); 
+            return(__result.string() == __p.string()); 
+        }
+
         // Compare path to string
         inline bool operator!=(const std::string& __s)
         {
             path __result(*this); 
             return(__result.string() != __s); 
+        }
+
+        // Compare path to path
+        inline bool operator!=(const path& __p)
+        {
+            path __result(*this); 
+            return(__result.string() != __p.string()); 
+        }
+
+
+        // Concat path with string (no separator added) 
+        inline void operator+=(const std::string& __s)
+        {
+            _pathname += __s; 
+        }
+
+        // Concat path with path (no separator added) 
+        inline void operator+=(const path& __p)
+        {
+            _pathname += __p._pathname; 
         }
 
     
@@ -252,12 +296,22 @@ namespace filesystem {
 
 
         // Check if path has extension. Note if you have a separator after a period,
-        // this is not counted as an extension.
+        // this is not counted as an extension. Also, at least in GCC, the endings /.. and /.
+        // are not counted as extensions. 
         inline bool has_extension() const
         {
             int ext_pos = _pathname.find_last_of('.'); 
             int sep_pos = _pathname.find_last_of(separator); 
-            if (ext_pos <= sep_pos)
+            std::string end1 = {separator, '.' , '.'}; 
+            std::string end2 = {separator, '.'}; 
+            
+            if ( (ext_pos == -1) || (ext_pos < sep_pos) )               //  a.b/c 
+                return false;
+            if ( (_pathname.size() > 2) && 
+                 (_pathname.substr(ext_pos-2,3) == end1) )  //  a/..
+                return false;
+            if ( (_pathname.size() > 1) && 
+                 (_pathname.substr(ext_pos-1,2) == end2) )   //  a/.
                 return false;
             else 
                 return true; 
@@ -275,32 +329,58 @@ namespace filesystem {
                 return path(_pathname.substr(ext_pos,_pathname.size())); 
         }
 
-        // For GCC and MSVC, both replaces and returns
+
+        // For GCC and MSVC, both replaces and returns. 
+        // If has an extension, replaces, otherwise, adds new extension
         inline path replace_extension(const std::string& new_ext)
         {
-            int ext_pos = _pathname.find_last_of('.'); 
-            int sep_pos = _pathname.find_last_of(separator); 
-            if (ext_pos <= sep_pos)
-                return path(_pathname);
-            else {
+            if (has_extension()) {
+                int ext_pos = _pathname.find_last_of('.'); 
                 _pathname = _pathname.substr(0,ext_pos) + new_ext;  
                 return path(_pathname);
             }
+            else {
+                _pathname += new_ext; 
+                return path(_pathname); 
+            } 
             
         }
 
+        // Get the stem of the path (filename without extension) 
+        inline path stem()
+        {
+            path ret = path(_pathname).filename(); 
+            if (ret.has_extension()) 
+                ret.replace_extension(""); 
+            return(ret); 
+        }
 
 
     private: 
-#ifdef _GLIBCXX_FILESYSTEM_IS_WINDOWS 
-        static const char separator = '\\';
-#else
-        static const char separator = '/';
-#endif
-  
         std::string _pathname; 
 
     }; // end class path
+
+
+    // Class for filesystem errors. I only implement a single constructor and 
+    // prefix what() message. Override what() method since otherwise ec.code().message() is added.
+    //see https://en.cppreference.com/w/cpp/error/errno_macros for list of error codes
+    class filesystem_error : public std::system_error
+    {
+        public:
+            filesystem_error(const std::string& __what_arg, int __ec)
+              : 
+              std::system_error(__ec, std::generic_category(), "filesystem hack error: " + __what_arg),
+              err_msg("filesystem hack error: " + __what_arg)
+            { }; 
+
+            ~filesystem_error(){};
+
+            const char* what() const noexcept { return err_msg.c_str(); };  
+
+        private:
+            std::string err_msg; 
+    }; 
 
 
     // Return absolute path of current working dir (getcwd)
@@ -320,7 +400,7 @@ namespace filesystem {
     // Get the absolute value of the path. Note that in both MSVC 
     // and GNU, this returns the given path if already absolute, 
     // including if first character is the path separator. 
-    static path absolute(const path &given)
+    static path absolute(const path& given)
     {
         if (given.is_absolute())
             return path(given.string());
@@ -328,6 +408,14 @@ namespace filesystem {
             return current_path() / given;
     };
 
+    static path absolute(const std::string& given)
+    {
+        path p(given); 
+        if (p.is_absolute())
+            return p;
+        else
+            return current_path() / p;
+    };
 
     // Return true if path exists
     static bool exists(const path& given)
@@ -344,12 +432,205 @@ namespace filesystem {
         return S_ISDIR(buffer.st_mode);  
     }
 
+    // Return absolute path with dot or dot-dot elements converted to real path.
+    // Give error if path does not exist
+    static path canonical(const path& given)
+    {
+        if (!exists(given)) {
+            std::string err_msg = "cannot canonicalize: No such file or directory [" + 
+                given.string() + "]"; 
+
+            throw filesystem_error(err_msg, ENOENT);  
+        }
+
+        std::string canon = absolute(given).string(); 
+
+        // Ok, first collapse /./ to /
+        std::string sdot = {separator, '.', separator}; 
+        int dot_pos = canon.find(sdot);
+        while (dot_pos != -1)
+        {
+            canon.erase(dot_pos,2); 
+            dot_pos = canon.find(sdot); 
+        }
+
+        // Then Collapse  a/b/../c to a/c 
+        std::string ddot = {separator, '.' , '.', separator}; 
+        dot_pos = canon.find(ddot);    // Need to collapse left to right
+        int sep_pos; 
+        while (dot_pos != -1)
+        {
+            sep_pos = canon.substr(0,dot_pos).find_last_of(separator); 
+            if (sep_pos != -1)  
+                canon.erase(sep_pos, dot_pos - sep_pos + 3); 
+
+            dot_pos = canon.find(ddot);
+        }
+
+        return path(canon); 
+    };
+
+    static path canonical (const std::string& s)
+    {
+        return canonical(path(s)); 
+    }
+
+
     // Create a new directory with standard permissions
     static void create_directory(const path& given)
     {
         mkdir(given.string().c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
     }
 
+    // Return true if file or directory is empty
+    static bool is_empty( const path& given) 
+    {
+        if (!exists(given)) {
+            std::string err_msg = "cannot check if file is empty: No such file or directory [" + given.string() + "]"; 
+            throw filesystem_error(err_msg, ENOENT);  
+        }
+
+        if ( is_directory(given) ) {
+            struct dirent *entry; 
+            DIR *dir = opendir(given.string().c_str());
+            // Above should have already caught this...
+            if (dir == NULL) {
+                std::string err_msg = "not a dir or doesn't exist[" + given.string() + "]"; 
+                throw filesystem_error(err_msg, ENOENT);  
+            }
+
+            int n = 0; 
+            while ((entry = readdir(dir)) != NULL) {
+                if (++n > 2)            // First two are always . and ..
+                    break; 
+            }
+            closedir(dir); 
+            return (n == 2); 
+        }
+        else {
+            std::ifstream test(given.string(), std::ifstream::binary); 
+            test.seekg(0, test.end); 
+            int len = test.tellg(); 
+            test.close(); 
+            return(len == 0);  
+        }
+
+        return false; 
+    }
+
+    // Remove a file
+    static bool remove(const path& given)
+    {
+        if ( is_directory(given) && !is_empty(given) )   
+        {
+            std::string err_msg = "cannot remove: Directory not empty [" + given.string() + "]"; 
+            throw filesystem_error(err_msg, ENOTEMPTY);  
+        }
+        try{
+            if (0)  // DEBUGGING 
+                cout << "removing: " << given.string() << endl; 
+            else
+                std::remove(given.string().c_str()); 
+            return true; 
+        } catch (filesystem_error& ec) {
+           std::cout << ec.what() << endl;  
+        }
+        return false; 
+    }
+    static bool remove(const std::string& given)
+    {
+        return (remove(path(given))); 
+    }
+
+    // Remove a folder and all of its contents
+    // GCC version returns the number of deleted files/dirs, but I don't...
+    static bool remove_all(const path& given) 
+    {
+        // Check if dir and remove if not
+        if ( !is_directory(given) ) 
+        {
+            return (remove(given)); 
+        }
+        else if (is_empty(given)) 
+        {
+            return (remove(given)); 
+        }
+            
+
+        // Otherwise, get the children
+        struct dirent *entry; 
+        DIR *dir = opendir(given.string().c_str());
+        // Above should have already caught this...
+        if (dir == NULL) {
+            std::string err_msg = "not a dir or doesn't exist[" + given.string() + "]"; 
+            throw filesystem_error(err_msg, ENOENT);  
+        }
+
+        int n = 0; 
+        while ((entry = readdir(dir)) != NULL) {
+            if (++n < 3)                    // First two are always . and ..
+                continue;
+            path sub(given); 
+            sub /= std::string(entry->d_name); 
+            remove_all(sub);  
+        }
+        closedir (dir); 
+
+        return (remove(given)); 
+    }
+
+    static bool remove_all(const std::string& given)
+    {
+        return (remove_all(path(given))); 
+    } 
+
+
+
+    /// Bitmask type
+    // Since only implementing copy_file, I only implement the copy_file options.
+    // I also don't want to deal with checking timestamps, so I don't implement update_existing.
+    enum class copy_options : unsigned short {
+      none = 0,
+      skip_existing = 1, overwrite_existing = 2, //update_existing = 4,
+    };
+
+    // Copy a file
+    static bool copy_file(const path& a, const path& b, copy_options opts = copy_options::none)
+    {
+        if (!exists(a)) {
+            std::string err_msg = "cannot copy file: No such file or directory [" + 
+                a.string() + "]"; 
+
+            throw filesystem_error(err_msg, ENOENT);  
+        }
+
+        if (exists(b)) {
+
+            if (opts == copy_options::skip_existing)
+                return false; 
+            else if (opts != copy_options::overwrite_existing) {
+
+                std::string err_msg = "cannot copy file: File exists [" + 
+                    b.string() + "]"; 
+
+                throw filesystem_error(err_msg, EEXIST);  
+            }
+        }
+
+                    
+        try {
+            std::ifstream from(a.string(), std::ios::binary); 
+            std::ofstream to(b.string(), std::ios::binary); 
+            to << from.rdbuf(); 
+
+            return true; 
+        } catch (filesystem_error& ec) {
+           std::cout << ec.what() << endl;  
+        }
+
+        return false; 
+    }
+                 
 
 
 
