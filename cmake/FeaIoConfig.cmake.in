@@ -1,10 +1,8 @@
-# Make sure we have dependencies available
-find_package(nlohmann_json 3.2.0 CONFIG REQUIRED
-        HINTS "${CMAKE_SOURCE_DIR}/../third_party/json_install_dir" "${CMAKE_SOURCE_DIR}/../json_install_dir"
-              "${CMAKE_SOURCE_DIR}/../third_party/json_build" "${CMAKE_SOURCE_DIR}/../json_build"
-              "${CMAKE_SOURCE_DIR}/../third_party/json/install_dir" "${CMAKE_SOURCE_DIR}/../json/install_dir"
-              "${CMAKE_SOURCE_DIR}/../third_party/json/build" "${CMAKE_SOURCE_DIR}/../json/build"
-)
+# Make sure we have public dependencies available
+find_package(nlohmann_json 3.2.0 CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../third_party/json_install_dir" "${CMAKE_SOURCE_DIR}/../../third_party/json_install_dir" "${CMAKE_SOURCE_DIR}/modules/third_party/json_install_dir")
+
+
 if(@FEAIO_USE_MPI@)
         find_package(MPI REQUIRED)
 endif()
@@ -14,7 +12,7 @@ if(NOT TARGET FeaIo::FeaIo)
     include("${FEAIO_CMAKE_DIR}/FeaIoTargets.cmake")
 endif()
 
-set(FEAIO_LIBRARIES FeaIo::FeaIo)
+#set(FEAIO_LIBRARIES FeaIo::FeaIo)
 
 # For targets that use this project they can call this in order to group the
 # headers by directory in within Visual Studio.

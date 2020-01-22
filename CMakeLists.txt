@@ -1,11 +1,29 @@
-cmake_policy(SET CMP0048 NEW)
 cmake_minimum_required(VERSION 3.8)
 
-project(FEAIO VERSION 1.0.0 LANGUAGES C CXX)
+cmake_policy(SET CMP0048 NEW)
+project(FEAIO VERSION 1.0.0 LANGUAGES CXX)
+
+# Set package toolchain location for Linux. To enable efficient switching between
+# toolchains for cross-compiling, we modify the location where CMake looks for 
+# packages using the find_package command by symbolically linking the default location,
+# $HOME/.cmake/packages, to a similar location with the folder name given by the 
+# compiler family. 
+if (UNIX)
+    execute_process(COMMAND "mkdir" "-p" "$ENV{HOME}/.cmake/${CMAKE_CXX_COMPILER_ID}"
+      RESULT_VARIABLE toolchain_res OUTPUT_VARIABLE toolchain_out)
+    if (toolchain_res)
+        message(ERROR "Couldn't create toolchain dir: $ENV{HOME}/.cmake/${CMAKE_CXX_COMPILER_ID} ${toolchain_out}")
+    endif ()
+    execute_process(COMMAND "ln" "-sfn" "$ENV{HOME}/.cmake/${CMAKE_CXX_COMPILER_ID}" "$ENV{HOME}/.cmake/packages"
+      RESULT_VARIABLE toolchain_res OUTPUT_VARIABLE toolchain_out)
+    if (toolchain_res)
+        message(ERROR "Couldn't create toolchain link: $ENV{HOME}/.cmake/packages ${toolchain_out}")
+    endif ()
+endif()
 
 # Options
 option( FEAIO_BuildParaViewReader "Build ParaView reader for the JSON-binary format supported by the FEAIO project. (Requires having build ParaView from source)" OFF )
-option( FEAIO_BuildTests "Build the unit tests." ON )
+option( FEAIO_BuildTests "Build the unit tests." OFF )
 option( FEAIO_USE_MPI "Indicates if the MPI routines should be included in the build. (Required for parallel writing)." OFF )
 option( FEAIO_UseFilesystemHack "Use if compiler does not have <experimental/filesystem>" OFF )
 
@@ -13,24 +31,23 @@ option( FEAIO_UseFilesystemHack "Use if compiler does not have <experimental/fil
 message( STATUS "Gen: ${CMAKE_GENERATOR}, CXX: ${CMAKE_CXX_COMPILER_ID}, Mode: ${CMAKE_BUILD_TYPE}" )
 message( STATUS "Tests: ${FEAIO_BuildTests}, MPI: ${FEAIO_USE_MPI}, ParaView: ${FEAIO_BuildParaViewReader}, FS HACK: ${FEAIO_UseFilesystemHack}" )
 
+# Add cmake dir to module path
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 ##################
 # Checking input #
 ##################
 
 include( ${CMAKE_SOURCE_DIR}/cmake/CommonInputChecks.cmake )
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-
 ########################
 # Declare dependencies #
 ########################
 
-find_package( nlohmann_json 3.2.0 CONFIG REQUIRED
-              HINTS "${CMAKE_SOURCE_DIR}/../third_party/json_build" "${CMAKE_SOURCE_DIR}/../json_build"
-                    "${CMAKE_SOURCE_DIR}/../third_party/json_install_dir" "${CMAKE_SOURCE_DIR}/../json_install_dir"
-                    "${CMAKE_SOURCE_DIR}/../third_party/json/build" "${CMAKE_SOURCE_DIR}/../json/build"
-                    "${CMAKE_SOURCE_DIR}/../third_party/json/install_dir" "${CMAKE_SOURCE_DIR}/../json/install_dir"
-)
+
+find_package(nlohmann_json 3.2.0 CONFIG REQUIRED HINTS 
+  "${CMAKE_SOURCE_DIR}/../third_party/json_install_dir" "${CMAKE_SOURCE_DIR}/../../third_party/json_install_dir" "${CMAKE_SOURCE_DIR}/modules/third_party/json_install_dir")
+
 
 if( FEAIO_USE_MPI )
     find_package(MPI REQUIRED)
@@ -42,29 +59,7 @@ endif()
 
 # Set the variables for FEAIO
 set(FEAIO_INCLUDE ${CMAKE_SOURCE_DIR}/include)
-set(FEAIO_INCLUDE_SUB ${FEAIO_INCLUDE}/fea_io)
-set(FEAIO_HEADER_LIST
-        ${FEAIO_INCLUDE_SUB}/common/Common.h
-        ${FEAIO_INCLUDE_SUB}/common/Exceptions.h
-        ${FEAIO_INCLUDE_SUB}/common/IOUtils.h
-        ${FEAIO_INCLUDE_SUB}/common/MPIUtils.h
-        ${FEAIO_INCLUDE_SUB}/data/DataReader.h
-        ${FEAIO_INCLUDE_SUB}/data/DataStructs.h
-        ${FEAIO_INCLUDE_SUB}/data/DataWriter.h
-        ${FEAIO_INCLUDE_SUB}/group/GroupReader.h
-        ${FEAIO_INCLUDE_SUB}/group/GroupStructs.h
-        ${FEAIO_INCLUDE_SUB}/group/GroupWriter.h
-        ${FEAIO_INCLUDE_SUB}/mesh/MeshEnums.h
-        ${FEAIO_INCLUDE_SUB}/mesh/MeshInfoStructs.h
-        ${FEAIO_INCLUDE_SUB}/mesh/MeshIteratorAdapters.h
-        ${FEAIO_INCLUDE_SUB}/mesh/MeshParWriter.h
-        ${FEAIO_INCLUDE_SUB}/mesh/MeshReader.h
-        ${FEAIO_INCLUDE_SUB}/mesh/MeshStructs.h
-        ${FEAIO_INCLUDE_SUB}/mesh/MeshWriter.h
-        ${FEAIO_INCLUDE_SUB}/meta/MetaEnums.h
-        ${FEAIO_INCLUDE_SUB}/meta/MetaReader.h
-        ${FEAIO_INCLUDE_SUB}/meta/MetaStructs.h
-        ${FEAIO_INCLUDE_SUB}/meta/MetaWriter.h)
+file (GLOB_RECURSE FEAIO_HEADER_LIST "${FEAIO_INCLUDE}/*.h")
         
 # Create header-only target
 add_library(feaio INTERFACE)
@@ -81,6 +76,7 @@ add_library(FeaIo::FeaIo ALIAS feaio)
 # Add C++ 14 flag (at interface level since this is a header-only
 # library and downstream executables will also need the flag)
 target_compile_features(feaio INTERFACE cxx_std_14)
+
 # Use filesystem if available
 if( FEAIO_UseFilesystemHack )
 else()
@@ -97,6 +93,7 @@ endif()
 
 # Link dependencies
 target_link_libraries(feaio INTERFACE nlohmann_json::nlohmann_json)
+
 if(FEAIO_USE_MPI AND MPI_FOUND)
     target_compile_definitions(feaio INTERFACE USE_MPI)
         target_include_directories(feaio INTERFACE ${MPI_CXX_INCLUDE_PATH})
@@ -105,7 +102,7 @@ if(FEAIO_USE_MPI AND MPI_FOUND)
 endif()
 
 #######################################
-# Add dev and ParaView reader targets #
+# Add unit test and ParaView reader targets #
 #######################################
 
 # Build paraview plugin
@@ -162,7 +159,7 @@ install(FILES
 # Exports #
 ###########
 
-# Export just the feaio target (not the dev, tests, ParaViewReader, etc.)
+# Export just the feaio target (not tests, ParaViewReader, etc.)
 export(
     TARGETS feaio
         FILE ${CMAKE_CURRENT_BINARY_DIR}/FeaIoTargets.cmake
