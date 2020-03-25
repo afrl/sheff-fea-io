@@ -274,6 +274,8 @@ private:
 	std::vector<ArrayReaderPair> GetDataArrayReaders(
 		const fea_io::MetaReader* metaReader,
 		const fea_io::MeshObject* meshObject,
+		vtkDataArraySelection* PointDataArraySelection,
+		vtkDataArraySelection* CellDataArraySelection,
 		std::vector<std::unique_ptr<fea_io::DataReader>>& dataReaderPtrs);
 	
 	/// Given a partition, creates a VTK unstructured grid for a specified subcomponent

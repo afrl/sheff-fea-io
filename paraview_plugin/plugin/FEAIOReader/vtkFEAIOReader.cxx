@@ -27,7 +27,7 @@
 #include "vtkCellIterator.h"
 #include "vtkSelection.h"
 #include "vtkSelectionNode.h"
-#include "vtkExtractCells.h"
+#include "vtkExtractSelectedIds.h"
 // VTK arrays used
 #include "vtkShortArray.h"
 #include "vtkIntArray.h"
@@ -836,6 +836,8 @@ std::pair<int, double> vtkFEAIOReader::UpdateTime(
 std::vector<ArrayReaderPair> vtkFEAIOReader::GetDataArrayReaders(
 	const fea_io::MetaReader * metaReaderPtr,
 	const fea_io::MeshObject * meshObjectPtr,
+	vtkDataArraySelection* PointDataArraySelection,
+	vtkDataArraySelection* CellDataArraySelection,
 	std::vector<std::unique_ptr<fea_io::DataReader>>& dataReaderPtrs)
 {
 	// Get the types of arrays in all the data files for this time step and organize the types of data
@@ -849,7 +851,7 @@ std::vector<ArrayReaderPair> vtkFEAIOReader::GetDataArrayReaders(
 		auto arrayInfos = dataReader.get_array_infos();
 		for (auto& arrayInfo : arrayInfos)
 		{
-			if (this->GetVolumePointArrayStatus(arrayInfo.name.c_str()))
+			if (PointDataArraySelection->ArrayIsEnabled(arrayInfo.name.c_str()))
 			{
 				// Point data that does not need averaging
 				if (arrayInfo.type == fea_io::ArrayType::Node
@@ -869,7 +871,7 @@ std::vector<ArrayReaderPair> vtkFEAIOReader::GetDataArrayReaders(
 						&dataReader });
 				}
 			}
-			if (this->GetVolumeCellArrayStatus(arrayInfo.name.c_str()))
+			if (CellDataArraySelection->ArrayIsEnabled(arrayInfo.name.c_str()))
 			{
 				// Cell data that does not need averaging
 				if (arrayInfo.type == fea_io::ArrayType::Element)
@@ -1382,7 +1384,11 @@ void vtkFEAIOReader::SetupAndReadMultiblock(
 			meshInfoByLevel.push_back(meshReader.get_mesh_info());
 
 			arrayReadersByLevel.push_back(this->GetDataArrayReaders(
-				metaReaderPtr, &lodMeshObjects[i], dataReaderPtrs));
+				metaReaderPtr,
+				&lodMeshObjects[i],
+				PointDataArraySelection,
+				CellDataArraySelection,
+				dataReaderPtrs));
 		}
 		else
 		{
@@ -1449,13 +1455,15 @@ void vtkFEAIOReader::UpdateOutput(
 		if (dataObject->IsA("vtkUnstructuredGrid"))
 		{
 			auto unstructuredGrid = vtkUnstructuredGrid::SafeDownCast(dataObject);
+
 			auto relativeLevelData = vtkShortArray::SafeDownCast(
 				unstructuredGrid->GetCellData()->GetArray("RelativeLevel"));
 
 			// Get the ids of cells to keep
 			// It must be between 0 and the selected level
 			// OR equal to -(selected level + 1)
-			vtkSmartPointer<vtkIdList> cellIdsToKeep = vtkSmartPointer<vtkIdList>::New();
+			vtkSmartPointer<vtkIdTypeArray> cellIdsToKeep = vtkSmartPointer<vtkIdTypeArray>::New();
+			cellIdsToKeep->SetNumberOfComponents(1);
 			auto cellIter = unstructuredGrid->NewCellIterator();
 			for (cellIter->InitTraversal(); !cellIter->IsDoneWithTraversal(); cellIter->GoToNextCell())
 			{
@@ -1464,7 +1472,7 @@ void vtkFEAIOReader::UpdateOutput(
 				if ((relativeLevel >= 0 && relativeLevel <= selectedLevel)
 					|| (relativeLevel == -(selectedLevel + 1)))
 				{
-					cellIdsToKeep->InsertNextId(cellId);
+					cellIdsToKeep->InsertNextValue(cellId);
 				}
 			}
 			cellIter->Delete();
@@ -1473,11 +1481,24 @@ void vtkFEAIOReader::UpdateOutput(
 
 			// Extract the cells for this block from the input and put them
 			// in the new grid created in the output
-			vtkSmartPointer<vtkExtractCells> extraction = vtkSmartPointer<vtkExtractCells>::New();
-			extraction->SetInputData(unstructuredGrid);
-			extraction->SetCellList(cellIdsToKeep);
-			extraction->SetOutput(output->GetDataSet(blockIter));
-			extraction->Update();
+			{
+				vtkSmartPointer<vtkSelectionNode> selectionNode =
+					vtkSmartPointer<vtkSelectionNode>::New();
+				selectionNode->SetFieldType(vtkSelectionNode::CELL);
+				selectionNode->SetContentType(vtkSelectionNode::INDICES);
+				selectionNode->SetSelectionList(cellIdsToKeep);
+
+				vtkSmartPointer<vtkSelection> selection =
+					vtkSmartPointer<vtkSelection>::New();
+				selection->AddNode(selectionNode);
+
+				vtkSmartPointer<vtkExtractSelectedIds> extractSelectedIds =
+					vtkSmartPointer<vtkExtractSelectedIds>::New();
+				extractSelectedIds->SetInputDataObject(0, unstructuredGrid);
+				extractSelectedIds->SetInputData(1, selection);
+				extractSelectedIds->SetOutput(output->GetDataSet(blockIter));
+				extractSelectedIds->Update();
+			}
 		}
 		else
 		{
