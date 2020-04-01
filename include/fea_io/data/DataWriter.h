@@ -282,11 +282,17 @@ namespace fea_io
 		for (auto& da_info : array_infos_) {
 			// For any partition written to on this processor, ensure the size written is as expected
 			std::vector<LocalIndex> partition_written_to_for_this_proc;
-			for (auto i = 0; i < partition_infos_.size(); i++) {
+			for (auto i = 0; i < partition_infos_.size(); i++)
+			{
 				const std::streamoff bytes_written = da_info.curr_bytes_written[i];
 				if (bytes_written > 0 && bytes_written != da_info.num_bytes[i])
+				{
 					throw _MSG_EXCEPT_C("The number of bytes written for data array " + da_info.name + " did not match the size expected. Bytes written = " + std::to_string(bytes_written) + " but bytes expected = " + std::to_string(da_info.num_bytes[i]) + ".");
-				partition_written_to_for_this_proc.push_back(i);
+				}
+				if (bytes_written > 0)
+				{
+					partition_written_to_for_this_proc.push_back(i);
+				}
 			}
 
 			// Ensure each partition was only written to once across all the processors
