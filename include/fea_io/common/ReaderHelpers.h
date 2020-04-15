@@ -5,24 +5,33 @@
 
 namespace fea_io
 {
+    /// Finds the list of levels of detail for the give time step ID and returns the reverse.
+    /// \param time_step_id - an index in the range [0 ... # of time steps) will get the
+    ///        corresponding time step, but -1 will get the input data.
     template<typename GlobalIndex, typename LocalIndex, typename CoordType>
     std::vector<LevelOfDetail> get_reversed_lods(
         const MetaReader& meta_reader,
         const int64_t& time_step_id)
     {
         auto& analysis_info = meta_reader.get_analysis_meta();
-        auto find_iter = std::find_if(
-            analysis_info.timesteps.begin(),
-            analysis_info.timesteps.end(),
-			[time_step_id](const TimeStepInfo& ts) -> bool { return ts.time_step_id == time_step_id; });
-        if (find_iter == analysis_info.timesteps.end())
+        std::vector<fea_io::LevelOfDetail> levels_of_detail_reversed;
+        if (time_step_id >= 0)
         {
-            _MSG_EXCEPT("Time step not found with id: " + std::to_string(time_step_id));
+            auto find_iter = std::find_if(
+                analysis_info.timesteps.begin(),
+                analysis_info.timesteps.end(),
+                [time_step_id](const TimeStepInfo& ts) -> bool { return ts.time_step_id == time_step_id; });
+            if (find_iter == analysis_info.timesteps.end())
+            {
+                _MSG_EXCEPT("Time step not found with id: " + std::to_string(time_step_id));
+            }
+            levels_of_detail_reversed = (*find_iter).levels_of_detail;
+        }
+        else
+        {
+            levels_of_detail_reversed = analysis_info.input_info.levels_of_detail;
         }
 
-        auto& levels_of_detail = (*find_iter).levels_of_detail;
-
-        auto levels_of_detail_reversed = levels_of_detail;
         // Assume that the JSON may not have the level's of detail sorted.
         std::sort(
             levels_of_detail_reversed.begin(),

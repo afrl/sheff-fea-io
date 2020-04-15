@@ -81,41 +81,59 @@ struct DataArrayNames
 	std::set<std::string> allCellArrays;
 };
 
-DataArrayNames GetDataArrayNames(
+static void GetDataArrayNamesHelper(
 	const fea_io::MetaReader& metaReader,
-	const fea_io::MeshObjectType typeToFind)
+	const fea_io::MeshObjectType typeToFind,
+	const std::vector<fea_io::LevelOfDetail>& levels_of_detail,
+	DataArrayNames& dataNames)
 {
-	DataArrayNames dataNames;
-	for (auto& ts : metaReader.get_analysis_meta().timesteps)
+	for (auto& lod : levels_of_detail)
 	{
-		for (auto& lod : ts.levels_of_detail)
+		for (auto& meshObject : lod.mesh_objects)
 		{
-			for (auto& meshObject : lod.mesh_objects)
+			if (meshObject.type == typeToFind)
 			{
-				if (meshObject.type == typeToFind)
+				auto dataPaths = meshObject.data_paths;
+				for (auto& path : dataPaths)
 				{
-					auto dataPaths = meshObject.data_paths;
-					for (auto& path : dataPaths)
-					{
-						fea_io::DataReader dataReader(metaReader.get_adjusted_path(path));
-						auto arraysInFile = dataReader.get_types_of_data_in_file();
-						for (auto& arrayPair : arraysInFile) {
-							if (arrayPair.second == fea_io::ArrayType::Node
-								|| arrayPair.second == fea_io::ArrayType::NodeByComponent
-								|| arrayPair.second == fea_io::ArrayType::NodeByElement)
-							{
-								dataNames.allPointArrays.insert(arrayPair.first);
-							}
-							else if (arrayPair.second == fea_io::ArrayType::Element
-								|| arrayPair.second == fea_io::ArrayType::QuadPointByElement)
-							{
-								dataNames.allCellArrays.insert(arrayPair.first);
-							}
+					fea_io::DataReader dataReader(metaReader.get_adjusted_path(path));
+					auto arraysInFile = dataReader.get_types_of_data_in_file();
+					for (auto& arrayPair : arraysInFile) {
+						if (arrayPair.second == fea_io::ArrayType::Node
+							|| arrayPair.second == fea_io::ArrayType::NodeByComponent
+							|| arrayPair.second == fea_io::ArrayType::NodeByElement)
+						{
+							dataNames.allPointArrays.insert(arrayPair.first);
+						}
+						else if (arrayPair.second == fea_io::ArrayType::Element
+							|| arrayPair.second == fea_io::ArrayType::QuadPointByElement)
+						{
+							dataNames.allCellArrays.insert(arrayPair.first);
 						}
 					}
 				}
 			}
 		}
+	}
+}
+
+DataArrayNames GetDataArrayNames(
+	const fea_io::MetaReader& metaReader,
+	const fea_io::MeshObjectType typeToFind)
+{
+	DataArrayNames dataNames;
+	GetDataArrayNamesHelper(
+		metaReader,
+		typeToFind,
+		metaReader.get_analysis_meta().input_info.levels_of_detail,
+		dataNames);
+	for (auto& ts : metaReader.get_analysis_meta().timesteps)
+	{
+		GetDataArrayNamesHelper(
+			metaReader,
+			typeToFind,
+			ts.levels_of_detail,
+			dataNames);
 	}
 	return dataNames;
 }
@@ -579,7 +597,9 @@ int vtkFEAIOReader::RequestData(
 			this->VolumeMultiBlockStructure->Initialize();
 
 			// Get the time ID closet to the time requested
-			auto timePair = this->UpdateTime(outInfo,
+			auto timePair = this->UpdateTime(
+				analysisMetaInfo,
+				outInfo,
 				this->VolumeMultiBlockStructure);
 			auto currentTimeIndex = timePair.first;
 			CurrentTime = timePair.second;
@@ -613,7 +633,9 @@ int vtkFEAIOReader::RequestData(
 			this->SurfaceMultiBlockStructure->Initialize();
 
 			// Get the time ID closet to the time requested
-			auto timePair = this->UpdateTime(outInfo,
+			auto timePair = this->UpdateTime(
+				analysisMetaInfo,
+				outInfo,
 				this->SurfaceMultiBlockStructure);
 			auto currentTimeIndex = timePair.first;
 			CurrentTime = timePair.second;
@@ -677,9 +699,16 @@ void vtkFEAIOReader::ReadMetaInformation()
 
 		// Get the time steps from the meta reader
 		TimestepValues.clear();
-		for (auto& ts : metaReader.get_analysis_meta().timesteps)
+		if (analysisMetaInfo.timesteps.size() > 0)
 		{
-			TimestepValues.push_back(ts.time);
+			for (auto& ts : analysisMetaInfo.timesteps)
+			{
+				TimestepValues.push_back(ts.time);
+			}
+		}
+		else
+		{
+			TimestepValues.push_back(0.0);
 		}
 
 		//VolumeLevelsOfDetail.resize(analysisMetaInfo.levels_of_detail_names.size());
@@ -695,7 +724,15 @@ void vtkFEAIOReader::ReadMetaInformation()
 		}
 
 		// Get the mesh at the first time step to find the partition information
-		auto meshObject = analysisMetaInfo.timesteps[0].levels_of_detail[0].mesh_objects[0];
+		fea_io::MeshObject meshObject;
+		if (analysisMetaInfo.timesteps.size() == 0)
+		{
+			meshObject = analysisMetaInfo.input_info.levels_of_detail[0].mesh_objects[0];
+		}
+		else
+		{
+			meshObject = analysisMetaInfo.timesteps[0].levels_of_detail[0].mesh_objects[0];
+		}
 		fea_io::MeshReader<IndexType, IndexType, CoordType> meshReader(
 			metaReader.get_adjusted_path(meshObject.mesh_path));
 		auto partitionInfo = meshReader.get_partition_info();
@@ -804,10 +841,15 @@ void vtkFEAIOReader::UpdateComponents()
 }
 
 std::pair<int, double> vtkFEAIOReader::UpdateTime(
+	const fea_io::AnalysisMetaInfo& analysisMetaInfo,
 	vtkSmartPointer<vtkInformation>& outInfo,
 	vtkSmartPointer<vtkMultiBlockDataSet>& output)
 {
-	if (outInfo->Has(vtkStreamingDemandDrivenPipeline::UPDATE_TIME_STEP()))
+	if (analysisMetaInfo.timesteps.size() == 0)
+	{
+		return { -1, 0.0 };
+	}
+	else if (outInfo->Has(vtkStreamingDemandDrivenPipeline::UPDATE_TIME_STEP()))
 	{
 		// Get the requested time step (only supports a single time step)
 		double requestedTime = outInfo->Get(vtkStreamingDemandDrivenPipeline::UPDATE_TIME_STEP());
@@ -830,7 +872,10 @@ std::pair<int, double> vtkFEAIOReader::UpdateTime(
 		PRINT_DEBUG_STR("Requested time: " + std::to_string(requestedTime) + " gave time in data of " + std::to_string(closestTime));
 		return { closestTimeIndex, closestTime };
 	}
-	return { 0, 0.0 };
+	else
+	{
+		return { 0, 0.0 };
+	}
 }
 
 std::vector<ArrayReaderPair> vtkFEAIOReader::GetDataArrayReaders(

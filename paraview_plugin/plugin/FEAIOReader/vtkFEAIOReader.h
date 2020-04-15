@@ -64,6 +64,7 @@ namespace fea_io
 	struct MeshObject;
 	class MetaReader;
 	enum class MeshObjectType;
+	struct AnalysisMetaInfo;
 }
 
 class FEAIOREADERS_EXPORT vtkFEAIOReader : public vtkMultiBlockDataSetAlgorithm
@@ -258,6 +259,7 @@ private:
 	/// Updates the output with the requested time, and returns the closest time
 	/// in the data to the requested time.
 	std::pair<int, double> UpdateTime(
+		const fea_io::AnalysisMetaInfo& analysisMetaInfo,
 		vtkSmartPointer<vtkInformation>& outInfo,
 		vtkSmartPointer<vtkMultiBlockDataSet>& output);
 
