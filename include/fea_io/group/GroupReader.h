@@ -41,6 +41,12 @@ namespace fea_io
 			const std::string array_name,
 			std::vector<DataType>& data);
 
+		/// TODO
+		std::vector<std::string> get_node_group_names() const;
+
+		/// TODO
+		std::vector<std::string> get_element_group_names() const;
+
 	private:
 		std::vector<GroupInfo> group_infos_;
 		std::map<std::string, std::size_t> group_name_to_id_map_;
@@ -71,6 +77,32 @@ namespace fea_io
 	inline GroupReader::~GroupReader()
 	{
 		in_stream_.close();
+	}
+
+	inline std::vector<std::string> GroupReader::get_node_group_names() const
+	{
+		std::vector<std::string> group_names;
+		for (auto& info : group_infos_)
+		{
+			if (info.type == fea_io::GroupType::Node)
+			{
+				group_names.push_back(info.name);
+			}
+		}
+		return group_names;
+	}
+
+	inline std::vector<std::string> GroupReader::get_element_group_names() const
+	{
+		std::vector<std::string> group_names;
+		for (auto& info : group_infos_)
+		{
+			if (info.type == fea_io::GroupType::Element)
+			{
+				group_names.push_back(info.name);
+			}
+		}
+		return group_names;
 	}
 
 	template<typename IndexType>

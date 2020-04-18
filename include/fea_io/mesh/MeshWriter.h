@@ -39,7 +39,7 @@ namespace fea_io
 		explicit MeshWriter();
 		virtual ~MeshWriter();
 
-		/// Some notes on the paramters:
+		/// Some notes on the parameters:
 		/// - file_path: leave off the extension but provide path and file name
 		/// - dimensionality: indicates if 1D, 2D, or 3D (1, 2, or 3 respectively)
 		/// - extent: 3D bounding box of entire mesh (helps with post-processing scripts)

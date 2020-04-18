@@ -32,6 +32,7 @@ namespace fea_io
 		int32_t data_type_num_bytes;
 		int32_t num_comps;
 		std::vector<std::string> comp_names;
+
 		/// The id of the data array (or index in the vector of ArrayInfo objects)
 		/// Note: set within DataWriter::intialize or GroupWriter::initialize
 		int32_t id;

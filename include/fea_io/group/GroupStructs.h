@@ -33,20 +33,27 @@ namespace fea_io
 
 	struct GroupInfo
 	{
+		/// The name of node/element group
 		std::string name;
 		/// The type of group (node or element)
 		GroupType type;
 		/// The data arrays to write for the group.
 		std::vector<ArrayInfo> array_infos;
+
+		/// The number of nodes/elements in the group.  Note: the size should match
+		/// the total number of partitions in the mesh.  Any partition that does not
+		/// contain a node or element in the group should just have a 0.
+		/// For use with GroupWriter, which writes in serial, this is set as groups are written.
+		/// For use with GroupParWriter, this must be set before GroupParWriter::intialize() is
+		/// called, and it can be set in GroupInfo::initialize().
+		std::vector<int64_t> num_objects_in_partitions;
+		
 		/// The number of bytes that the integral type requres
+		/// Note: set within GroupWriter::initialize
 		int8_t index_type_num_bytes;
 		/// The id of the data array (or index in the vector of ArrayInfo objects)
 		/// Note: set within GroupWriter::initialize
 		int32_t id;
-		/// The number of nodes/elements in the group.  Note: the size should match
-		/// the total number of partitions in the mesh.  Any partition that does not
-		/// contain a node or element in the group should just have a 0.
-		std::vector<int64_t> num_objects_in_partitions;
 		/// The offset of the index list for the nodes/elements in the group relative
 		/// to the beginning of the file.  Note: set by GroupWriter::initialize(...)
 		std::vector<std::streamoff> object_list_offsets;
@@ -56,7 +63,7 @@ namespace fea_io
 			const std::string name_a,
 			const GroupType type_a,
 			const std::vector<ArrayInfo>& array_infos_a,
-			const std::vector<int64_t>& num_objects_in_partitions_a)
+			const std::vector<int64_t>& num_objects_in_partitions_a = {})
 		{
 			name = name_a;
 			type = type_a;
