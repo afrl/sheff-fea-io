@@ -113,7 +113,7 @@ namespace fea_io
 	#define BIN_READ_CONVERT_ARR(ReadType) \
 		else if (size_of_data_type_in_file == sizeof(ReadType)) { \
 			std::array<ReadType, Size> tmp; \
-			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(Size * sizeof(ReadType))); \
+			in.read(reinterpret_cast<char*>(tmp.data()), static_cast<std::streamsize>(Size * sizeof(ReadType))); \
 			val = convert_array<T>(tmp); \
 		}
 
@@ -135,33 +135,41 @@ namespace fea_io
 	inline void IOUtils::binary_read(std::ifstream & in, std::array<T, Size>& val, const int8_t size_of_data_type_in_file)
 	{
 		if (size_of_data_type_in_file == sizeof(T)) {
-			in.read(reinterpret_cast<char*>(&val[0]), static_cast<std::streamsize>(val.size() * sizeof(T)));
+			in.read(reinterpret_cast<char*>(val.data()), static_cast<std::streamsize>(val.size() * sizeof(T)));
 		}
 		BIN_READ_CONVERT_ARR(float)
 		BIN_READ_CONVERT_ARR(double)
 		else
+		{
 			throw _MSG_EXCEPT("Conversion not available to data type with " + std::to_string(size_of_data_type_in_file) + " bytes.");
+		}
 	}
 
 	template<typename T, typename std::enable_if<std::is_integral<T>::value, T>::type*>
 	inline void IOUtils::binary_read(std::ifstream & in, std::vector<T>& val, const std::size_t num_values, const int8_t size_of_data_type_in_file)
 	{
 		val.resize(num_values);
+		if (num_values == 0)
+		{
+			return;
+		}
 		if (size_of_data_type_in_file == sizeof(T)) {
-			in.read(reinterpret_cast<char*>(&val[0]), static_cast<std::streamsize>(num_values * sizeof(T)));
+			in.read(reinterpret_cast<char*>(val.data()), static_cast<std::streamsize>(num_values * sizeof(T)));
 		}
 		else if (size_of_data_type_in_file == sizeof(int16_t)) {
 			std::vector<int16_t> tmp(num_values);
-			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(num_values * sizeof(int16_t)));
+			in.read(reinterpret_cast<char*>(tmp.data()), static_cast<std::streamsize>(num_values * sizeof(int16_t)));
 			val.assign(tmp.begin(), tmp.end());
 		}
 		else if (size_of_data_type_in_file == sizeof(int32_t)) {
 			std::vector<int32_t> tmp(num_values);
-			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(num_values * sizeof(int32_t)));
+			in.read(reinterpret_cast<char*>(tmp.data()), static_cast<std::streamsize>(num_values * sizeof(int32_t)));
 			val.assign(tmp.begin(), tmp.end());
 		}
 		else
+		{
 			throw _MSG_EXCEPT("Conversion not available to data type with " + std::to_string(size_of_data_type_in_file) + " bytes.");
+		}
 	}
 
 	template<typename T, typename std::enable_if<std::is_floating_point<T>::value, T>::type*>
@@ -172,11 +180,11 @@ namespace fea_io
             return;
         }
 		else if (size_of_data_type_in_file == sizeof(T)) {
-			in.read(reinterpret_cast<char*>(&val[0]), static_cast<std::streamsize>(num_values * sizeof(T)));
+			in.read(reinterpret_cast<char*>(val.data()), static_cast<std::streamsize>(num_values * sizeof(T)));
 		}
 		else if (size_of_data_type_in_file == sizeof(float)) {
 			std::vector<float> tmp(num_values);
-			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(num_values * sizeof(float)));
+			in.read(reinterpret_cast<char*>(tmp.data()), static_cast<std::streamsize>(num_values * sizeof(float)));
 			val.assign(tmp.begin(), tmp.end());
 		}
 		else
@@ -191,15 +199,19 @@ namespace fea_io
 		}
 		else if (size_of_data_type_in_file == sizeof(int16_t)) {
 			std::vector<int16_t> tmp(num_values);
-			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(num_values * sizeof(int16_t)));
+			in.read(reinterpret_cast<char*>(tmp.data()), static_cast<std::streamsize>(num_values * sizeof(int16_t)));
 			for (auto i = 0; i < num_values; i++)
+			{
 				val[i] = static_cast<T>(tmp[i]);
+			}
 		}
 		else if (size_of_data_type_in_file == sizeof(int32_t)) {
 			std::vector<int32_t> tmp(num_values);
-			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(num_values * sizeof(int32_t)));
+			in.read(reinterpret_cast<char*>(tmp.data()), static_cast<std::streamsize>(num_values * sizeof(int32_t)));
 			for (auto i = 0; i < num_values; i++)
+			{
 				val[i] = static_cast<T>(tmp[i]);
+			}
 		}
 		else
 			throw _MSG_EXCEPT("Conversion not available to data type with " + std::to_string(size_of_data_type_in_file) + " bytes.");
@@ -209,13 +221,15 @@ namespace fea_io
 	inline void IOUtils::binary_read(std::ifstream & in, T * val, const std::size_t num_values, const int8_t size_of_data_type_in_file)
 	{
 		if (size_of_data_type_in_file == sizeof(T)) {
-			in.read(reinterpret_cast<char*>(&val[0]), static_cast<std::streamsize>(num_values * sizeof(T)));
+			in.read(reinterpret_cast<char*>(val), static_cast<std::streamsize>(num_values * sizeof(T)));
 		}
 		else if (size_of_data_type_in_file == sizeof(float)) {
 			std::vector<float> tmp(num_values);
-			in.read(reinterpret_cast<char*>(&tmp[0]), static_cast<std::streamsize>(num_values * sizeof(float)));
+			in.read(reinterpret_cast<char*>(tmp.data()), static_cast<std::streamsize>(num_values * sizeof(float)));
 			for (auto i = 0; i < num_values; i++)
+			{
 				val[i] = static_cast<T>(tmp[i]);
+			}
 		}
 		else
 			throw _MSG_EXCEPT("Conversion not available to data type with " + std::to_string(size_of_data_type_in_file) + " bytes.");
