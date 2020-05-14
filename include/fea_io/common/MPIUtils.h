@@ -428,14 +428,19 @@ namespace fea_io
             // Allocate a buffer to put the data in
             int num_total_values_needed = 0;
             for (auto num_values : num_values_for_each_proc)
+            {
                 num_total_values_needed += num_values;
+            }
             std::vector<T> recv_buffer(num_total_values_needed);
 
-            // Note: num_bytes_for_this_proc, recv_counts, and recv_offsets must all be
-            // in terms of the bytes (not number of values)
-            MPI_Gatherv(&data_from_this_proc[0], num_bytes_for_this_proc, MPI_CHAR,
-                &recv_buffer[0], &recv_counts[0], &recv_offsets[0], MPI_CHAR,
-                0, comm);
+            if (num_total_values_needed > 0)
+            {
+                // Note: num_bytes_for_this_proc, recv_counts, and recv_offsets must all be
+                // in terms of the bytes (not number of values)
+                MPI_Gatherv(&data_from_this_proc[0], num_bytes_for_this_proc, MPI_CHAR,
+                    &recv_buffer[0], &recv_counts[0], &recv_offsets[0], MPI_CHAR,
+                    0, comm);
+            }
 
             return recv_buffer;
         }
