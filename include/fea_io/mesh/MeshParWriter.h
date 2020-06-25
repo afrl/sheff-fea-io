@@ -185,12 +185,13 @@ namespace fea_io
 	{
 		Parent::out_stream_.close();
 
+		// The root rank will get the entire list of partition info, which will allow it
+		// to calculate the appropriate offsets.
+		auto all_partition_info = MPIUtils::gather_vectors(Parent::partition_infos_);
+
 		// Only rank 0 should write the JSON file
 		if (MPIUtils::get_local_rank() == 0) {
-			// The root rank will get the entire list of partition info, which will allow it
-			// to calculate the appropriate offsets.
-			auto all_partition_info = MPIUtils::gather_vectors(Parent::partition_infos_);
-
+			
 			std::ofstream json_component(Parent::file_path_ + Parent::json_ext);
 			json j;
 			j["meta_info"] = Parent::meta_info_;

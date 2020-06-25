@@ -298,14 +298,17 @@ namespace fea_io
 			// Ensure each partition was only written to once across all the processors
 			auto all_partitions_written_to = MPIUtils::gather_vectors(partition_written_to_for_this_proc);
 			if (MPIUtils::get_local_rank() == 0) {
-				std::sort(all_partitions_written_to.begin(), all_partitions_written_to.end());
-				if (all_partitions_written_to[0] != 0)
-					throw _MSG_EXCEPT_C("Partition 0 was not written to.");
-				for (auto i = 0; i < all_partitions_written_to.size() - 1; i++) {
-					if (all_partitions_written_to[i + 1] == all_partitions_written_to[i])
-						throw _MSG_EXCEPT_C("Partition " + std::to_string(all_partitions_written_to[i]) + " was written to twice.");
-					if (all_partitions_written_to[i + 1] != all_partitions_written_to[i] + 1)
-						throw _MSG_EXCEPT_C("Partition " + std::to_string(all_partitions_written_to[i] + 1) + " was not written to.");
+				if (!all_partitions_written_to.empty())
+				{
+					std::sort(all_partitions_written_to.begin(), all_partitions_written_to.end());
+					if (all_partitions_written_to[0] != 0)
+						throw _MSG_EXCEPT_C("Partition 0 was not written to.");
+					for (auto i = 0; i < all_partitions_written_to.size() - 1; i++) {
+						if (all_partitions_written_to[i + 1] == all_partitions_written_to[i])
+							throw _MSG_EXCEPT_C("Partition " + std::to_string(all_partitions_written_to[i]) + " was written to twice.");
+						if (all_partitions_written_to[i + 1] != all_partitions_written_to[i] + 1)
+							throw _MSG_EXCEPT_C("Partition " + std::to_string(all_partitions_written_to[i] + 1) + " was not written to.");
+					}
 				}
 			}
 		}
