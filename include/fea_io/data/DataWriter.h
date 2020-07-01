@@ -206,11 +206,14 @@ namespace fea_io
 		auto& array_info = array_infos_[find_iter->second];
 		out_stream_.seekp(array_info.begin_offsets[partition_id] + array_info.curr_bytes_written[partition_id]);
 
+		/*  This doesn't seem useful and messes up the ability to memory map in numpy.
 		// For quad point data, write how many quad points there are for this element (assumes this is called once per an element)
 		if (array_info.type == ArrayType::QuadPointByElement) {
 			IOUtils::binary_write(out_stream_, static_cast<int16_t>(num_values));
 			array_info.curr_bytes_written[partition_id] += sizeof(int16_t);
 		}
+		*/
+
 		// Write the array of data
         for (LocalIndex i = 0; i < num_values; i++)
         {
@@ -248,11 +251,14 @@ namespace fea_io
 		auto& array_info = array_infos_[find_iter->second];
 		out_stream_.seekp(array_info.begin_offsets[partition_id] + array_info.curr_bytes_written[partition_id]);
 
+		/*  This doesn't seem useful and messes up the ability to memory map in numpy.
 		// For quad point data, write how many quad points there are for this element (assumes this is called once per an element)
 		if (array_info.type == ArrayType::QuadPointByElement) {
 			IOUtils::binary_write(out_stream_, static_cast<int16_t>(num_values));
 			array_info.curr_bytes_written[partition_id] += sizeof(int16_t);
 		}
+		*/
+
 		// Write the array of data
 		for (auto i = 0; i < num_values; i++)
 			IOUtils::binary_write(out_stream_, data[i], array_info.num_comps);
