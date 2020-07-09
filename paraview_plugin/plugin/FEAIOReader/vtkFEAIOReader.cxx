@@ -105,8 +105,12 @@ static void GetDataArrayNamesHelper(
 						{
 							dataNames.allPointArrays.insert(arrayPair.first);
 						}
-						else if (arrayPair.second == fea_io::ArrayType::Element
-							|| arrayPair.second == fea_io::ArrayType::QuadPointByElement)
+						// Note: for now, skip the quadrature point data.  The format of the data has been changed
+						//	     in the binary files so that the number of quad points do not preceed each element's
+						//       quad data.  Consequently, we need a # of quad points cell-array to average the
+						//       quad data.  For now, just skip them until a solution has been created.
+						else if (arrayPair.second == fea_io::ArrayType::Element)
+							//|| arrayPair.second == fea_io::ArrayType::QuadPointByElement)
 						{
 							dataNames.allCellArrays.insert(arrayPair.first);
 						}

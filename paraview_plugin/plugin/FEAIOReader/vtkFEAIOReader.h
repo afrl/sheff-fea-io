@@ -249,6 +249,10 @@ private:
 	vtkFEAIOReader(const vtkFEAIOReader&) = delete;
     void operator=(const vtkFEAIOReader&) = delete;
 
+	/// Note: for now, skips the quadrature point data.  The format of the data has been changed
+	///	      in the binary files so that the number of quad points do not preceed each element's
+	///       quad data.  Consequently, we need a # of quad points cell-array to average the
+	///       quad data.  For now, just skip them until a solution has been created.
 	void ReadMetaInformation();
 
 	/// Returns the partitions this processor is responsible for.

@@ -5,6 +5,8 @@
 
 #ifdef HAVE_MPI
 #    include <mpi.h>
+#else
+using MPI_Comm = int;
 #endif
 
 #include <atomic>
@@ -31,7 +33,7 @@ namespace fea_io
         std::atomic<bool> initialized;
         // Local communicator for all processes that initialize this object
         // with the same "color"
-        int local_comm;
+        MPI_Comm local_comm;
 
         // Process rank in MPI_COMM_WORLD
         int global_rank;
@@ -189,7 +191,7 @@ namespace fea_io
         static const int get_local_rank() { return get_state().local_rank; }
 
         /// Returns the local communicator for the processors that call init with the same group_key
-        static const int get_local_comm() { return get_state().local_comm; }
+        static const MPI_Comm get_local_comm() { return get_state().local_comm; }
 
         /// Returns the number of ranks in the local communicator
         static const int get_num_local_ranks();
