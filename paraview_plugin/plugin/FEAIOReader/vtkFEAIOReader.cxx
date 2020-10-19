@@ -1011,15 +1011,7 @@ void vtkFEAIOReader::CreateVTKMesh(
 		const IndexType indexInPartition = subcomponent.elements_in_subcomponent[vtkElementNumber];
 
 		// Get connectivity
-		unsigned int idIndex = 0;
 		const auto& conn = currPartition.element_connectivities[indexInPartition];
-		std::vector<vtkIdType> ids(conn.size());
-		// Convert the connectivity to be relative to the subcomponent numbering
-		for (const unsigned int partitionNodeNumber : conn)
-		{
-			ids[idIndex] = partToSubcompNodeMap[partitionNodeNumber];
-			idIndex++;
-		}
 
 		// Insert a new VTK cell
 		auto const elemType = currPartition.element_types[indexInPartition];
@@ -1029,20 +1021,46 @@ void vtkFEAIOReader::CreateVTKMesh(
 				<< static_cast<char>(elemType)
 				<< " could not be converted to a VTK type.");
 		VTKCellType ct = ctIterator->second;
-		std::vector<vtkIdType> idsReordered = fea_io::get_to_vtk_reordering(meshInfo.connectivity_scheme, elemType, ids);
-		if (idsReordered.size() == 0)
-		{
-			vtkErrorMacro("VTK mapping not found.");
-		}
 		if (elemType != fea_io::ElementType::POLYHEDRON)
 		{
+            std::vector<vtkIdType> ids(conn.size());
+            // Convert the connectivity to be relative to the subcomponent numbering
+            unsigned int idIndex = 0;
+            for (const unsigned int partitionNodeNumber : conn) {
+                ids[idIndex] = partToSubcompNodeMap[partitionNodeNumber];
+                idIndex++;
+            }
+            std::vector<vtkIdType> idsReordered = fea_io::get_to_vtk_reordering(
+				meshInfo.connectivity_scheme, elemType, ids);
+            if (idsReordered.size() == 0) {
+                vtkErrorMacro("VTK mapping not found.");
+            }
+
 			mesh->InsertNextCell(ct, idsReordered.size(), &(idsReordered[0]));
 		}
 		else
 		{
-			// VTK requires a different interface for polyhedron cells
-			//  ( cell type, number of faces, face stream )
-			mesh->InsertNextCell(ct, idsReordered[0], &(idsReordered[1]));
+            // VTK requires a different interface for polyhedron cells
+            //  ( cell type, number of faces, face stream )
+            std::vector<vtkIdType> ids;
+            ids.reserve(conn.size());
+
+            // Convert the connectivity to be relative to the subcomponent numbering
+			// being careful not to map the # of points in each face
+            vtkIdType conn_counter = 1;
+            for (auto face_index = 0; face_index < conn[0]; face_index++)
+			{
+                auto n_pts_in_face = conn[conn_counter];
+                conn_counter++;
+                ids.push_back(n_pts_in_face);
+				for (auto i = 0; i < n_pts_in_face; i++)
+				{
+                    ids.push_back(partToSubcompNodeMap[conn[conn_counter + i]]);
+				}
+                conn_counter += n_pts_in_face;
+			}
+			
+			mesh->InsertNextCell(ct, conn[0], &(ids[0]));
 		}
 	}
 
