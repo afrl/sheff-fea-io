@@ -71,7 +71,7 @@ namespace fea_io
 			num_objects_in_partitions = num_objects_in_partitions_a;
 
 			id = -1;
-			if (not std::is_integral<IndexType>::value)
+            if (!std::is_integral<IndexType>::value)
 				throw _MSG_EXCEPT_C("Groups must use integral data types for the indexing, but a non-integral type was provided.");
 			index_type_num_bytes = sizeof(IndexType);
 		}

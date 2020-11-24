@@ -80,7 +80,7 @@ namespace fea_io
 		DataTypeSizes data_types;
 		data_types.deduce<GlobalIndex, LocalIndex, CoordType>();
 		data_types_in_file = j["types"];
-		if (not data_types.is_large_enough(data_types_in_file))
+        if (!data_types.is_large_enough(data_types_in_file))
 		{
 			throw _MSG_EXCEPT_C("The data types used for the MeshReader template are \
 				too small for the data in the file being read.");
