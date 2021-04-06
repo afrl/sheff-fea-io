@@ -3,24 +3,6 @@ cmake_minimum_required(VERSION 3.8)
 cmake_policy(SET CMP0048 NEW)
 project(FEAIO VERSION 1.0.0 LANGUAGES CXX)
 
-# Set package toolchain location for Linux. To enable efficient switching between
-# toolchains for cross-compiling, we modify the location where CMake looks for 
-# packages using the find_package command by symbolically linking the default location,
-# $HOME/.cmake/packages, to a similar location with the folder name given by the 
-# compiler family. 
-if (UNIX)
-    execute_process(COMMAND "mkdir" "-p" "$ENV{HOME}/.cmake/${CMAKE_CXX_COMPILER_ID}"
-      RESULT_VARIABLE toolchain_res OUTPUT_VARIABLE toolchain_out)
-    if (toolchain_res)
-        message(ERROR "Couldn't create toolchain dir: $ENV{HOME}/.cmake/${CMAKE_CXX_COMPILER_ID} ${toolchain_out}")
-    endif ()
-    execute_process(COMMAND "ln" "-sfn" "$ENV{HOME}/.cmake/${CMAKE_CXX_COMPILER_ID}" "$ENV{HOME}/.cmake/packages"
-      RESULT_VARIABLE toolchain_res OUTPUT_VARIABLE toolchain_out)
-    if (toolchain_res)
-        message(ERROR "Couldn't create toolchain link: $ENV{HOME}/.cmake/packages ${toolchain_out}")
-    endif ()
-endif()
-
 # Options
 option( FEAIO_BuildParaViewReader "Build ParaView reader for the JSON-binary format supported by the FEAIO project. (Requires having build ParaView from source)" OFF )
 option( FEAIO_BuildTests "Build the unit tests." OFF )
@@ -32,22 +14,20 @@ message( STATUS "Gen: ${CMAKE_GENERATOR}, CXX: ${CMAKE_CXX_COMPILER_ID}, Mode: $
 message( STATUS "Tests: ${FEAIO_BuildTests}, MPI: ${FEAIO_USE_MPI}, ParaView: ${FEAIO_BuildParaViewReader}, FS HACK: ${FEAIO_UseFilesystemHack}" )
 
 # Add cmake dir to module path
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 ##################
 # Checking input #
 ##################
 
-include( ${CMAKE_SOURCE_DIR}/cmake/CommonInputChecks.cmake )
+include( ${PROJECT_SOURCE_DIR}/cmake/CommonInputChecks.cmake )
 
 ########################
 # Declare dependencies #
 ########################
 
-
 find_package(nlohmann_json 3.2.0 CONFIG REQUIRED HINTS 
-  "${CMAKE_SOURCE_DIR}/../third_party/json_install_dir" "${CMAKE_SOURCE_DIR}/../../third_party/json_install_dir" "${CMAKE_SOURCE_DIR}/modules/third_party/json_install_dir")
-
+  "${PROJECT_SOURCE_DIR}/../third_party/json_install_dir" "${PROJECT_SOURCE_DIR}/../../third_party/json_install_dir" "${PROJECT_SOURCE_DIR}/modules/third_party/json_install_dir")
 
 if( FEAIO_USE_MPI )
     find_package(MPI REQUIRED)
@@ -58,7 +38,7 @@ endif()
 #######################################
 
 # Set the variables for FEAIO
-set(FEAIO_INCLUDE ${CMAKE_SOURCE_DIR}/include)
+set(FEAIO_INCLUDE ${PROJECT_SOURCE_DIR}/include)
 file (GLOB_RECURSE FEAIO_HEADER_LIST "${FEAIO_INCLUDE}/*.h")
         
 # Create header-only target
@@ -76,6 +56,7 @@ add_library(FeaIo::FeaIo ALIAS feaio)
 # Add C++ 14 flag (at interface level since this is a header-only
 # library and downstream executables will also need the flag)
 target_compile_features(feaio INTERFACE cxx_std_14)
+set_target_properties(feaio PROPERTIES FOLDER "sheff")
 
 # Use filesystem if available
 if( FEAIO_UseFilesystemHack )
@@ -100,6 +81,16 @@ if(FEAIO_USE_MPI AND MPI_FOUND)
     target_link_libraries(feaio INTERFACE ${MPI_CXX_LIBRARIES} ${MPI_CXX_LINK_FLAGS})
         target_compile_options(feaio INTERFACE ${MPI_CXX_COMPILE_FLAGS})
 endif()
+
+###########################
+# Assigning source groups #
+###########################
+
+include("$ENV{SHEFF_TOOLS}/cmake/IncludeSHEFF.cmake")
+register_sources_sheff("fea_io"
+                       "${FEAIO_HEADER_LIST}"
+                       "${FEAIO_SOURCE_LIST}")
+assign_source_groups_sheff()
 
 #######################################
 # Add unit test and ParaView reader targets #
@@ -165,6 +156,3 @@ export(
         FILE ${CMAKE_CURRENT_BINARY_DIR}/FeaIoTargets.cmake
     NAMESPACE FeaIo::
 )
-
-# Register package in user's package registry
-export( PACKAGE FeaIo )
