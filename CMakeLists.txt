@@ -56,7 +56,6 @@ add_library(FeaIo::FeaIo ALIAS feaio)
 # Add C++ 14 flag (at interface level since this is a header-only
 # library and downstream executables will also need the flag)
 target_compile_features(feaio INTERFACE cxx_std_14)
-set_target_properties(feaio PROPERTIES FOLDER "sheff")
 
 # Use filesystem if available
 if( SHEFF_UseFilesystemHack )
