@@ -257,7 +257,7 @@ inline void DataWriter<GlobalIndex, LocalIndex, CoordType>::write_quad(
     std::streamoff curr_offset = 0;
     for (auto num_quads : num_quads_per_elem)
     {
-        write(partition_id, array_name, &data[curr_offset], num_quads);
+        write(partition_id, array_info.name, &data[curr_offset], num_quads);
         curr_offset += num_quads * array_info.num_comps;
     }
 }
