@@ -277,7 +277,7 @@ namespace fea_io
 			//	return x.id == id;
 			//});
 
-			IOUtils::binary_write(out_stream_, subcomonent_index);
+			IOUtils::binary_write(out_stream_, subcomponent.component_id);
 			IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(subcomponent.nodes_in_subcomponent.size()));
 			IOUtils::binary_write(out_stream_, subcomponent.nodes_in_subcomponent);
 			IOUtils::binary_write(out_stream_, static_cast<LocalIndex>(subcomponent.elements_in_subcomponent.size()));
