@@ -27,7 +27,7 @@ include( ${PROJECT_SOURCE_DIR}/cmake/CommonInputChecks.cmake )
 ########################
 
 find_package(nlohmann_json 3.2.0 CONFIG REQUIRED HINTS 
-  "${PROJECT_SOURCE_DIR}/../third_party/json_install_dir" "${PROJECT_SOURCE_DIR}/../../third_party/json_install_dir" "${PROJECT_SOURCE_DIR}/modules/third_party/json_install_dir")
+             "${PROJECT_SOURCE_DIR}/../../third_party/json_install_dir")
 
 if( SHEFF_USE_MPI )
     find_package(MPI REQUIRED)
