@@ -16,7 +16,6 @@
 namespace fea_io
 {
 	using json = nlohmann::json;
-	namespace fs = std::experimental::filesystem;
 
 	class MetaWriter
 	{
