@@ -10,19 +10,14 @@
 
 #ifdef HAVE_FILESYSTEM
 
-#   if defined(_WIN32) && !defined(__CYGWIN__)
-#       if _HAS_CXX17
-#           include <filesystem>
-            namespace fs = std::filesystem;
-#       else
-#           define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING 1
-#           include <experimental/filesystem>
-            namespace fs = std::experimental::filesystem;
-#       endif
-#   else
-#           include <experimental/filesystem>
-            namespace fs = std::experimental::filesystem;
-#   endif
+#if __has_include(<filesystem>)
+#include <filesystem>
+namespace fs = std::filesystem;
+
+#else
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#endif
 
 #else
 
