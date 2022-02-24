@@ -27,7 +27,7 @@ namespace fea_io
         }
     }
 
-    static const MeshObjectType mesh_object_type_from_name(const std::string& name)
+    static MeshObjectType mesh_object_type_from_name(const std::string& name)
     {
         if (name == "Volume") return MeshObjectType::Volume;
         else if (name == "Surface") return MeshObjectType::Surface;
@@ -53,7 +53,7 @@ namespace fea_io
         }
     }
 
-    static const LODParentRelation lod_parent_relation_from_name(const std::string& name)
+    static LODParentRelation lod_parent_relation_from_name(const std::string& name)
     {
         if (name == "ConformingOverlapping") return LODParentRelation::ConformingOverlapping;
         else if (name == "None") return LODParentRelation::None;
