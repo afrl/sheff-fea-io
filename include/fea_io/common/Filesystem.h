@@ -8,11 +8,16 @@
 #ifndef UTIL_FILESYSTEM_H
 #define UTIL_FILESYSTEM_H
 
+#ifndef SHEFF_FILESYSTEM_INCLUDED
+
+#define SHEFF_FILESYSTEM_INCLUDED
+
 #ifdef HAVE_FILESYSTEM
 
 #if __has_include(<filesystem>)
     #include <filesystem>
     namespace fs = std::filesystem;
+    #define SHEFF_FILESYSTEM_INCLUDED
 #else
     #define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING 1
     #include <experimental/filesystem>
@@ -665,3 +670,5 @@ namespace fs = std::experimental::filesystem;
 #endif // End #ifdef HAVE_FILESYSTEM
 
 #endif // UTIL_FILESYSTEM_H
+
+#endif
