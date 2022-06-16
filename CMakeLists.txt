@@ -53,9 +53,9 @@ target_include_directories(feaio INTERFACE
 target_sources(feaio INTERFACE ${FEAIO_HEADER_LIST})
 # Add an alias so that a library can be used inside the build tree, eg when testing
 add_library(FeaIo::FeaIo ALIAS feaio)
-# Add C++ 14 flag (at interface level since this is a header-only
+# Add C++ 17 flag (at interface level since this is a header-only
 # library and downstream executables will also need the flag)
-target_compile_features(feaio INTERFACE cxx_std_14)
+target_compile_features(feaio INTERFACE cxx_std_17)
 
 # Use filesystem if available
 if( SHEFF_UseFilesystemHack )
