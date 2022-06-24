@@ -1,0 +1,22 @@
+include:
+  - project: 'sheff/sheff_gitlab_ci'
+    ref: main
+    file: 'setup_build.yml'
+  - project: 'sheff/sheff_gitlab_ci'
+    ref: main
+    file: 'setup_doxygen.yml'
+
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+
+  script:
+    # Ensure the latest JSON artifacts are in ../json/install_dir
+    - test -d ../json || curl --location --output artifacts.zip "https://git.act3-ace.com/api/v4/projects/818/jobs/artifacts/main/download?job=build&job_token=$CI_JOB_TOKEN" && unzip artifacts.zip && rm artifacts.zip && mkdir ../json && mv ./install_dir ../json/install_dir
+    
+    - python3 make.py --config --build --verbose --make-tests --test
+    - python3 make.py --config --build --verbose --make-tests --mode=RelWithDebInfo
+
