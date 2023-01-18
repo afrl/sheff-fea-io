@@ -64,7 +64,8 @@ namespace fea_io
 	/// The meta file JSON is a bit more flexible than the reader supports.
 	/// This helper method validates that there is only one mesh object
 	/// for the given type of mesh at the level of detail indicated.
-	/// \param levels_of_detail_reversed - should come from get_reversed_lods()
+	/// @param levels_of_detail_reversed - should come from get_reversed_lods()
+    /// @param type - object type to search for
 	std::vector<MeshObject> get_mesh_obj_for_each_level(
 		const std::vector<LevelOfDetail>& levels_of_detail_reversed,
 		const MeshObjectType type)
@@ -114,7 +115,12 @@ namespace fea_io
 	/// Note: assumes the elements of the parent level should be inactive if
 	/// their local id appears as a global id in the lower level.
 	///
-	/// \param lod_mesh_objects - should come from get_mesh_obj_for_each_level()
+    /// @param meta_reader - meta file reader (.x.json)
+    /// @param lods_reversed - levels of detail going from finest to coarsest
+	/// @param lod_rev_mesh_objects - should come from get_mesh_obj_for_each_level()
+    /// @param lod_rev_index - index of current level of detail (0 being the finest)
+    /// @param partition - partition ID to search
+    /// @param type - object type to search (volume or surface)
     template<typename GlobalIndex, typename LocalIndex, typename CoordType>
 	LODWithPart<GlobalIndex, LocalIndex, CoordType>
     read_level_of_detail_helper(
