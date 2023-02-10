@@ -297,11 +297,16 @@ inline void DataWriter<GlobalIndex, LocalIndex, CoordType>::close()
 
     verify_data_sizes();
 
-    std::ofstream json_component(file_path_ + json_ext);
-    json j;
-    j["data_arrays"] = array_infos_;
-    json_component << std::setw(4) << j << std::endl;
-    json_component.close();
+    // This avoids an empty .d.json file from being created in the event a DataWriter
+    // is implicitly constructed but never used.
+    if (write_state_ == WriteState::WritePhase)
+    {
+        std::ofstream json_component(file_path_ + json_ext);
+        json j;
+        j["data_arrays"] = array_infos_;
+        json_component << std::setw(4) << j << std::endl;
+        json_component.close();
+    }
 
     write_state_ = WriteState::Finalized;
 }
