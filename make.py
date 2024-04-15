@@ -15,4 +15,4 @@ specialized_opts = [
                            modules_to_vars_map={'fea_io': ['SHEFF_USE_MPI']}),
 ]
 
-make_helper.make(specialized_opts)
+make_helper.make(specialized_opts, root_repo_name='fea_io')
